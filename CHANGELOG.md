@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Adjusted examples
+
 ## [0.2.2] - 2026-11-12
 
 ### Fixed
