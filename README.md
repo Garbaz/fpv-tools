@@ -32,7 +32,8 @@ built-in defaults. `fpv bb --help` lists the signals and the `--when` condition 
 Needs Python 3.12 or newer.
 
 ```sh
-uv tool install git+https://github.com/Garbaz/fpv-tools
+uv tool install fpv-tools                               # or: pipx install fpv-tools
+uv tool install git+https://github.com/Garbaz/fpv-tools  # the latest, unreleased
 ```
 
 Supports Betaflight 4.5, 2025.12 and 2026.6. Developed with a BETAFPV G473 flight controller on Betaflight 2026.6.
@@ -52,7 +53,7 @@ uv run scripts/gen_msp_codes.py path/to/betaflight
 ```
 
 To release, bump the version, move the notes under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) to it, and push
-a matching tag; the release workflow checks them and publishes the release on GitHub:
+a matching tag; the release workflow checks them and publishes the release on PyPI and GitHub:
 
 ```sh
 uv version --bump minor                                # or patch, major
