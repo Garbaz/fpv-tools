@@ -4,6 +4,7 @@ import struct
 import sys
 from typing import Any
 
+import construct as c
 import pytest
 
 from fakes import FakeMsp
@@ -117,6 +118,17 @@ class Terminal(io.StringIO):
 def test_every_inbound_message_has_a_known_effect() -> None:
     assert EFFECTS.keys() >= INBOUND
     assert EFFECTS.keys() <= CODES.keys()
+
+
+def test_fields_from_the_command_line() -> None:
+    # Design: numbers in any base, enum names, text, and lists comma-separated
+    layout = c.Struct(
+        "mode" / c.Enum(c.Int8ul, A=1, B=2), "ids" / c.Array(3, c.Int16ul), "name" / c.PascalString(c.Int8ul, "ascii")
+    )
+    assert (
+        codec.build(layout, {"mode": "B", "ids": "1,0x10,300", "name": "HI"})
+        == bytes([2, 1, 0, 16, 0, 44, 1, 2]) + b"HI"
+    )
 
 
 def test_layouts_on_real_replies() -> None:

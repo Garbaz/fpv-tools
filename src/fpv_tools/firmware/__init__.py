@@ -11,6 +11,8 @@ builds (alpha, RC) map to their line with a warning, because their tables can di
 builds number the debug modes from index 96 differently).
 """
 
+from __future__ import annotations
+
 import re
 import warnings
 from dataclasses import dataclass

@@ -29,7 +29,7 @@ built-in defaults. `fpv bb --help` lists the signals and the `--when` condition 
 
 ## Install
 
-Needs Python 3.14 or newer.
+Needs Python 3.12 or newer.
 
 ```sh
 uv tool install git+https://github.com/Garbaz/fpv-tools

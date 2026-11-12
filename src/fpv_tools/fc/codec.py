@@ -4,6 +4,8 @@ Layouts live in the firmware profile (they change between releases). This module
 plain Python values (for printing and JSON), and the text the command line provides.
 """
 
+from __future__ import annotations
+
 import struct
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
@@ -73,10 +75,10 @@ def _coerce(subcon: c.Construct[Any, Any], text: str) -> Any:
         case c.StringEncoded():
             return text
         case c.GreedyRange() | c.Array():
-            inner = cast(c.Construct[Any, Any], subcon.subcon)  # pyright: ignore[reportUnknownMemberType]
+            inner = cast("c.Construct[Any, Any]", subcon.subcon)  # pyright: ignore[reportUnknownMemberType]
             return [_coerce(inner, item) for item in text.split(",") if item]
         case c.Subconstruct():
-            return _coerce(cast(c.Construct[Any, Any], subcon.subcon), text)  # pyright: ignore[reportUnknownMemberType]
+            return _coerce(cast("c.Construct[Any, Any]", subcon.subcon), text)  # pyright: ignore[reportUnknownMemberType]
         case _:
             raise CodecError(f"cannot fill a {type(subcon).__name__} field from the command line")
 

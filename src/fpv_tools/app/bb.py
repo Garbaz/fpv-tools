@@ -3,6 +3,8 @@
 numpy, the decoder and the FC link are imported where a command needs them, so that `--help` is quick.
 """
 
+from __future__ import annotations
+
 import re
 import sys
 from collections.abc import Callable

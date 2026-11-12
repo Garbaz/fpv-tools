@@ -9,6 +9,8 @@ There are no built-in defaults: a setting nobody provides is an error that says 
 A `diff all` export omits settings at their default, so such a setting is missing there too.
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path

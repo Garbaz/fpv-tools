@@ -1,6 +1,4 @@
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +9,6 @@ from fpv_tools.firmware import Version, version_from_msp
 
 # A clone of github.com/betaflight/betaflight with the maintenance branches, e.g. BETAFLIGHT_SOURCE=~/src/betaflight
 SOURCE = Path(os.environ.get("BETAFLIGHT_SOURCE", "")).expanduser()
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_versions_from_log_headers_and_msp() -> None:
@@ -35,11 +32,8 @@ def test_mode_bits_depend_on_the_release_line() -> None:
     not os.environ.get("BETAFLIGHT_SOURCE") or not (SOURCE / ".git").exists(), reason="BETAFLIGHT_SOURCE not set"
 )
 def test_generated_tables_match_firmware_and_anchors_hold() -> None:
-    """The committed tables are what the generator produces from each line's maintenance branch, and every
-    firmware statement fpv-tools' logic relies on is still there (scripts/firmware_anchors.py)."""
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "gen_firmware_tables.py"), str(SOURCE), "--check"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
+    """The committed tables are what the generator makes of the commits they record, and every firmware statement
+    fpv-tools' logic relies on is still there (scripts/firmware_anchors.py)."""
+    from gen_firmware_tables import drift  # scripts/, imported only with the firmware source at hand
+
+    assert drift(SOURCE) == []

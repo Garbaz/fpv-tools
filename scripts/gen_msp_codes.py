@@ -67,7 +67,7 @@ def main(source: Path, ref: str) -> None:
         "",
         "CODES: dict[str, int] = {",
         *(
-            f"    {name!r}: {code},  # {comment}" if comment else f"    {name!r}: {code},"
+            f'    "{name}": {code},  # {comment}' if comment else f'    "{name}": {code},'
             for name, (code, comment) in codes.items()
         ),
         "}",
@@ -75,9 +75,11 @@ def main(source: Path, ref: str) -> None:
         "NAMES: dict[int, str] = {code: name for name, code in CODES.items()}",
         "",
         f"# {', '.join(INBOUND_HANDLERS)}",
-        "INBOUND: frozenset[str] = frozenset({",
-        *(f"    {name!r}," for name in handled),
-        "})",
+        "INBOUND: frozenset[str] = frozenset(",
+        "    {",
+        *(f'        "{name}",' for name in handled),
+        "    }",
+        ")",
         "",
     ]
     out = Path(__file__).resolve().parents[1] / "src" / "fpv_tools" / "fc" / "msp_codes.py"

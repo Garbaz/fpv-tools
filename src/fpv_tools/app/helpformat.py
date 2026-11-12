@@ -1,6 +1,8 @@
 """Help as plain lines, coloured: no boxes, and no lines padded to the window width (both break when the terminal is
 resized). Paragraphs are wrapped; indented blocks (examples, tables) are kept as written."""
 
+from __future__ import annotations
+
 import re
 import textwrap
 from typing import TYPE_CHECKING, Any

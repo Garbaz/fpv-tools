@@ -237,23 +237,29 @@ def committed(path: Path) -> dict[str, object]:
     return out
 
 
-def grow(
-    name: str, old: tuple[str, ...], new: list[str], aliases: dict[str, list[str]], args: argparse.Namespace
-) -> None:
+@dataclass(frozen=True)
+class Allow:
+    """Table changes accepted besides growth (--allow-rename, --allow-rewrite)."""
+
+    rename: bool = False
+    rewrite: bool = False
+
+
+def grow(name: str, old: tuple[str, ...], new: list[str], aliases: dict[str, list[str]], allow: Allow) -> None:
     """Enforce only-grow against the committed table; record renames as aliases (current name -> old names)."""
-    if len(new) < len(old) and not args.allow_rewrite:
+    if len(new) < len(old) and not allow.rewrite:
         raise GenerationError(f"{name}: {len(old) - len(new)} entries removed; --allow-rewrite to accept")
     for index, (before, after) in enumerate(zip(old, new, strict=False)):
         if before == after:
             continue
-        if before in new and not args.allow_rewrite:
+        if before in new and not allow.rewrite:
             raise GenerationError(f"{name}: {before} moved from index {index}; --allow-rewrite to accept")
-        if not (args.allow_rename or args.allow_rewrite):
+        if not (allow.rename or allow.rewrite):
             raise GenerationError(f"{name}[{index}]: {before} renamed to {after}; --allow-rename to record an alias")
         aliases.setdefault(after, []).append(before)
 
 
-def generate(repo: Path, line: str, ref: str, path: Path, args: argparse.Namespace, label: str | None = None) -> str:
+def generate(repo: Path, line: str, ref: str, path: Path, allow: Allow, label: str | None = None) -> str:
     """The table file for a line read at `ref`; `label` names the ref in its docstring (default: `ref`)."""
     check_anchors(repo, ref)
     previous = committed(path)
@@ -275,7 +281,7 @@ def generate(repo: Path, line: str, ref: str, path: Path, args: argparse.Namespa
         old = previous.get(name)
         if isinstance(old, tuple):
             entries: tuple[object, ...] = old  # pyright: ignore[reportUnknownVariableType]
-            grow(name, tuple(str(x) for x in entries), names, aliases, args)
+            grow(name, tuple(str(x) for x in entries), names, aliases, allow)
         body = "".join(f'    "{n}",\n' for n in names)
         out.append(f"{name}: tuple[str, ...] = (  # {spec.path} {spec.typedef}\n{body})")
     features = {n.removeprefix(FEATURES.prefix): v for n, v, alias in enumerators(repo, ref, FEATURES) if not alias}
@@ -301,6 +307,23 @@ def recorded(path: Path) -> tuple[str, str]:
     return m.group(1), m.group(2)
 
 
+def table_path(line: str) -> Path:
+    return OUT / f"betaflight_{line.replace('.', '_')}.py"
+
+
+def drift(repo: Path, refs: dict[str, str] | None = None, *, heads: bool = False) -> list[str]:
+    """How the committed table files differ from what the generator makes of `repo`, one line per differing file.
+    Each line is read at the commit its file records (reproducible), at its maintenance head with `heads`, or at
+    the ref `refs` gives for it. Raises GenerationError where it cannot generate, e.g. when a firmware anchor fails."""
+    out: list[str] = []
+    for line, head in LINES.items():
+        path = table_path(line)
+        label, ref = (None, refs[line]) if refs and line in refs else (None, head) if heads else recorded(path)
+        if generate(repo, line, ref, path, Allow(), label) != path.read_text():
+            out.append(f"{path.name}: differs from {ref}")
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("repo", type=Path, help="Betaflight firmware checkout")
@@ -314,26 +337,25 @@ def main() -> int:
     parser.add_argument("--allow-rename", action="store_true", help="accept renames at the same index (as aliases)")
     parser.add_argument("--allow-rewrite", action="store_true", help="accept removals and reorders")
     args = parser.parse_args()
+    repo: Path = args.repo.expanduser()
     given = dict(r.split("=", 1) for r in args.refs)
-    OUT.mkdir(exist_ok=True)
-    drift = False
     try:
+        if args.check:
+            differences = drift(repo, given, heads=args.heads)
+            for difference in differences:
+                print(difference, file=sys.stderr)
+            return 1 if differences else 0
+        OUT.mkdir(exist_ok=True)
         for line, head in LINES.items():
-            path = OUT / f"betaflight_{line.replace('.', '_')}.py"
-            ref, label = given.get(line, head), None
-            if args.check and not args.heads and line not in given:
-                label, ref = recorded(path)  # reproducible: what the file was generated from
-            content = generate(args.repo.expanduser(), line, ref, path, args, label)
-            if path.exists() and path.read_text() == content:
-                continue
-            drift = True
-            print(f"{path.name}: {'differs from' if args.check else 'written from'} {ref}", file=sys.stderr)
-            if not args.check:
+            path, ref = table_path(line), given.get(line, head)
+            content = generate(repo, line, ref, path, Allow(args.allow_rename, args.allow_rewrite))
+            if not path.exists() or path.read_text() != content:
                 path.write_text(content)
+                print(f"{path.name}: written from {ref}", file=sys.stderr)
     except GenerationError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    return 1 if args.check and drift else 0
+    return 0
 
 
 if __name__ == "__main__":

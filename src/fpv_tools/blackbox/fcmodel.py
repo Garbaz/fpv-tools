@@ -4,6 +4,8 @@ Each function cites the firmware code it reproduces; release-specific constants 
 settings the log lacks from the flight's settings.
 """
 
+from __future__ import annotations
+
 import math
 from typing import TYPE_CHECKING
 

@@ -191,7 +191,7 @@ def msp(
                     pending.append(name_of(code))  # before sending: Ctrl-C can come during --every
                 try:
                     _exchange(fc, layouts, code, payload, reply, raw, json, every, changes, count)
-                except MspTimeout, OSError:
+                except (MspTimeout, OSError):
                     if not (e and e.reboots):
                         raise
                     # msp_serial.c reboots once its transmit buffer is empty; over USB, before the host has read it

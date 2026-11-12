@@ -8,13 +8,14 @@ license-files = ["LICENSE"]
 authors = [
     { name = "Tobias Hoffmann", email = "garbaz.github@pm.me" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "construct>=2.10.70",
     "construct-typing>=0.8.1",
     "cyclopts>=5.3.3",
     "numpy>=2.5.4",
     "pyserial>=3.5",
+    "rich>=15.0.0",
     "scipy>=1.18.1",
 ]
 
@@ -53,12 +54,14 @@ extend-immutable-calls = ["fpv_tools.app.common.Link", "fpv_tools.app.common.Log
 
 [tool.pyright]
 include = ["src", "tests", "scripts"]
-pythonVersion = "3.14"
+pythonVersion = "3.12"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
 reportMissingTypeStubs = false
+extraPaths = ["scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["scripts"]
 markers = ["hardware: reads from a real flight controller; skipped unless FPV_TEST_PORT is set (tests/test_hardware.py)"]

@@ -1,5 +1,7 @@
 """Options shared by several commands, reading command input from arguments or stdin, and progress display."""
 
+from __future__ import annotations
+
 import sys
 import warnings
 from collections.abc import Callable, Generator, Iterator, Sequence
