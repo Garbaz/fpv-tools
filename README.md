@@ -51,4 +51,13 @@ uv run scripts/gen_firmware_tables.py path/to/betaflight
 uv run scripts/gen_msp_codes.py path/to/betaflight
 ```
 
+To release, bump the version, move the notes under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) to it, and push
+a matching tag; the release workflow checks them and publishes the release on GitHub:
+
+```sh
+uv version --bump minor                                # or patch, major
+git commit -am "Release $(uv version --short)"
+git tag "v$(uv version --short)" && git push origin main "v$(uv version --short)"
+```
+
 Licensed GPL-3.0-or-later, like Betaflight, whose log writer and source the decoder and tables follow.
