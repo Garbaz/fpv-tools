@@ -1,0 +1,64 @@
+[project]
+name = "fpv-tools"
+version = "0.1.0"
+description = "Read and inspect Betaflight flight controllers over USB/MSP"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Tobias Hoffmann", email = "garbaz.github@pm.me" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "construct>=2.10.70",
+    "construct-typing>=0.8.1",
+    "cyclopts>=5.3.3",
+    "numpy>=2.5.4",
+    "pyserial>=3.5",
+    "scipy>=1.18.1",
+]
+
+[project.scripts]
+fpv = "fpv_tools.app:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+    "scipy-stubs>=1.18.1.1",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-c>=0.24.2",
+    "types-pyserial>=3.5.0.20261104",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+# Generated tables and verbatim firmware statements
+per-file-ignores = { "src/fpv_tools/fc/msp_codes.py" = ["E501"], "scripts/firmware_anchors.py" = ["E501"] }
+
+[tool.ruff.lint.isort]
+known-first-party = ["fpv_tools", "fakes"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Frozen option dataclasses used as cyclopts parameter defaults
+extend-immutable-calls = ["fpv_tools.app.common.Link", "fpv_tools.app.common.LogOptions"]
+
+[tool.pyright]
+include = ["src", "tests", "scripts"]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["hardware: reads from a real flight controller; skipped unless FPV_TEST_PORT is set (tests/test_hardware.py)"]

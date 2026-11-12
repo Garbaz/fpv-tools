@@ -1,0 +1,268 @@
+
+# version
+# Betaflight / STM32G47X (G473) 2026.6.0-alpha May 15 2026 / 06:14:55 (e92c10887) MSP API: 1.48
+# config rev: 6703db5
+
+# start the command batch
+batch start
+
+# reset configuration to default settings
+defaults nosave
+
+board_name BETAFPVG473_V2
+manufacturer_id BEFH
+mcu_id 000000000000000000000000
+signature 
+
+# name: CRAFT
+
+# feature
+feature -AIRMODE
+feature TELEMETRY
+feature OSD
+
+# beacon
+beacon RX_LOST
+beacon RX_SET
+
+# aux
+aux 0 0 0 1700 2100 0 0
+aux 1 1 1 900 1300 0 0
+aux 2 2 1 1700 2100 0 0
+aux 3 13 3 1700 2100 0 0
+aux 4 35 4 1700 2100 0 0
+
+# vtxtable
+vtxtable bands 6
+vtxtable channels 8
+vtxtable band 1 BOSCAM_A A FACTORY 5865 5845 5825 5805 5785 5765 5745 5725
+vtxtable band 2 BOSCAM_B B FACTORY 5733 5752 5771 5790 5809 5828 5847 5866
+vtxtable band 3 BOSCAM_E E FACTORY 5705 5685 5665 5645 5885 5905 5925 5945
+vtxtable band 4 FATSHARK F FACTORY 5740 5760 5780 5800 5820 5840 5860 5880
+vtxtable band 5 RACEBAND R FACTORY 5658 5695 5732 5769 5806 5843 5880 5917
+vtxtable band 6 LOWRACE  L FACTORY 5362 5399 5436 5473 5510 5547 5584 5621
+vtxtable powerlevels 5
+vtxtable powervalues 1 2 3 4 0
+vtxtable powerlabels 25 100 200 400 PIT
+
+# vtx
+vtx 0 2 0 0 5 1300 1600
+vtx 1 2 0 0 1 900 1300
+vtx 2 2 0 0 3 1600 1875
+vtx 3 2 0 0 4 1875 2100
+
+# rxfail
+rxfail 6 h
+
+# master
+set acc_calibration = 18,39,29,1
+set fpv_mix_degrees = 20
+set blackbox_sample_rate = 1/16
+set dshot_bidir = ON
+set dshot_edt = ON
+set dshot_bitbang = AUTO
+set motor_pwm_protocol = DSHOT300
+set motor_poles = 12
+set align_board_yaw = 225
+set vbat_duration_for_warning = 100
+set vbat_duration_for_critical = 10
+set vbat_scale = 114
+set ibata_scale = 570
+set beeper_dshot_beacon_tone = 2
+set yaw_motors_reversed = ON
+set mixer_type = EZLANDING
+set small_angle = 180
+set report_cell_voltage = ON
+set osd_warn_bitmask = 524287
+set osd_rssi_alarm = 0
+set osd_rssi_dbm_alarm = -99
+set osd_cap_alarm = 384
+set osd_alt_alarm = 30
+set osd_core_temp_alarm = 85
+set osd_tim2 = 1
+set osd_vbat_pos = 2454
+set osd_rssi_pos = 226
+set osd_link_quality_pos = 353
+set osd_link_tx_power_pos = 353
+set osd_rssi_dbm_pos = 2401
+set osd_rsnr_pos = 2433
+set osd_tim_1_pos = 386
+set osd_tim_2_pos = 2411
+set osd_remaining_time_estimate_pos = 33
+set osd_flymode_pos = 2049
+set osd_throttle_pos = 342
+set osd_vtx_channel_pos = 18753
+set osd_ah_sbar_pos = 2254
+set osd_current_pos = 384
+set osd_mah_drawn_pos = 386
+set osd_motor_diag_pos = 141
+set osd_craft_name_pos = 2102
+set osd_pilot_name_pos = 2072
+set osd_home_dir_pos = 46
+set osd_home_dist_pos = 98
+set osd_flight_dist_pos = 130
+set osd_compass_bar_pos = 2058
+set osd_altitude_pos = 43
+set osd_pid_roll_pos = 231
+set osd_pid_pitch_pos = 167
+set osd_pid_yaw_pos = 136
+set osd_warnings_pos = 2313
+set osd_avg_cell_voltage_pos = 44
+set osd_pit_ang_pos = 97
+set osd_rol_ang_pos = 129
+set osd_battery_usage_pos = 392
+set osd_disarmed_pos = 2081
+set osd_nheading_pos = 203
+set osd_up_down_reference_pos = 206
+set osd_esc_tmp_pos = 2422
+set osd_esc_rpm_pos = 150
+set osd_rtc_date_time_pos = 385
+set osd_flip_arrow_pos = 2350
+set osd_core_temp_pos = 2390
+set osd_stick_overlay_left_pos = 128
+set osd_stick_overlay_right_pos = 150
+set osd_sys_goggle_voltage_pos = 160
+set osd_sys_bitrate_pos = 353
+set osd_sys_delay_pos = 353
+set osd_sys_lq_pos = 289
+set osd_sys_warnings_pos = 2281
+set osd_sys_vtx_temp_pos = 120
+set osd_stat_bitmask = 278316
+set osd_displayport_device = MAX7456
+set debug_mode = RX_TIMING
+set vtx_band = 2
+set vtx_channel = 1
+set vtx_power = 5
+set vtx_freq = 5733
+set vcd_video_system = NTSC
+set vcd_h_offset = -9
+set vcd_v_offset = -6
+set timezone_offset_minutes = 60
+set craft_name = CRAFT
+set pilot_name = PILOT
+
+profile 0
+
+# profile 0
+set profile_name = GF 1614
+set anti_gravity_gain = 50
+set iterm_relax_cutoff = 24
+set throttle_boost = 0
+set p_pitch = 33
+set i_pitch = 59
+set d_pitch = 22
+set f_pitch = 31
+set p_roll = 33
+set i_roll = 60
+set d_roll = 22
+set f_roll = 31
+set p_yaw = 33
+set i_yaw = 60
+set f_yaw = 31
+set d_max_roll = 24
+set d_max_pitch = 25
+set d_max_gain = 20
+set motor_output_limit = 55
+set feedforward_jitter_factor = 5
+set simplified_master_multiplier = 75
+set simplified_d_max_gain = 30
+set simplified_feedforward_gain = 35
+set simplified_pitch_d_gain = 90
+set simplified_pitch_pi_gain = 95
+set tpa_rate = 60
+set tpa_breakpoint = 1160
+
+profile 1
+
+# profile 1
+set profile_name = INDOOR
+set vbat_sag_compensation = 100
+set anti_gravity_gain = 50
+set iterm_rotation = ON
+set iterm_relax_cutoff = 24
+set throttle_boost = 0
+set p_pitch = 33
+set i_pitch = 59
+set d_pitch = 26
+set f_pitch = 31
+set p_roll = 33
+set i_roll = 60
+set d_roll = 25
+set f_roll = 31
+set p_yaw = 33
+set i_yaw = 60
+set f_yaw = 31
+set d_max_roll = 28
+set d_max_pitch = 29
+set d_max_gain = 20
+set feedforward_jitter_factor = 5
+set simplified_master_multiplier = 75
+set simplified_d_gain = 115
+set simplified_d_max_gain = 30
+set simplified_feedforward_gain = 35
+set simplified_pitch_d_gain = 90
+set simplified_pitch_pi_gain = 95
+set tpa_rate = 60
+set tpa_breakpoint = 1160
+set ez_landing_threshold = 40
+set ez_landing_limit = 5
+set landing_disarm_threshold = 100
+
+profile 2
+
+profile 3
+
+# restore original profile selection
+profile 1
+
+rateprofile 0
+
+# rateprofile 0
+set thr_mid = 25
+set thr_expo = 45
+set thr_hover = 16
+
+rateprofile 1
+
+# rateprofile 1
+set rateprofile_name = INDOOR
+set thr_mid = 27
+set thr_expo = 15
+set thr_hover = 18
+set roll_rc_rate = 21
+set pitch_rc_rate = 21
+set yaw_rc_rate = 21
+set roll_expo = 57
+set pitch_expo = 57
+set yaw_expo = 57
+set roll_srate = 70
+set pitch_srate = 70
+set yaw_srate = 70
+set throttle_limit_type = SCALE
+
+rateprofile 2
+
+rateprofile 3
+
+battery_profile 0
+
+# battery_profile 0
+set battery_profile_name = LiHV480
+set bat_capacity = 480
+set vbat_max_cell_voltage = 440
+set vbat_min_cell_voltage = 335
+set vbat_warning_cell_voltage = 355
+set force_battery_cell_count = 1
+
+battery_profile 1
+
+battery_profile 2
+
+# restore original rateprofile selection
+rateprofile 1
+
+# restore original battery_profile selection
+battery_profile 0
+
+# save configuration
+save
