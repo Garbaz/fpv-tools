@@ -34,7 +34,7 @@ uv tool install fpv-tools
 ### Flight controller
 
 ```sh
-uvx fpv-tools cli status 'get vbat'                               # CLI commands
+uvx fpv-tools cli 'status' 'get vbat'                             # CLI commands
 uvx fpv-tools cli 'diff all' > config.txt                         # a backup,
 uvx fpv-tools cli < config.txt                                    # and its restore
 uvx fpv-tools msp MSP_RC --every 0.05 --changes                   # poll a message
