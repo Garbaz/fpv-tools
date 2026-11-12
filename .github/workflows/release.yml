@@ -1,7 +1,7 @@
 name: Release
 
 # Pushing a tag vX.Y.Z releases version X.Y.Z to PyPI and GitHub: the tag must match pyproject.toml, and
-# CHANGELOG.md must have notes for it.
+# CHANGELOG.md must have notes for it. scripts/release.py prepares and pushes such a tag.
 on:
   push:
     tags: ["v*"]
