@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The PyPI page: current description, links to the repository, changelog and issues, and the supported Python
+  versions.
+
 ## [0.2.0] - 2026-11-12
 
 ### Changed

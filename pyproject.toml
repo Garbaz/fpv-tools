@@ -1,7 +1,7 @@
 [project]
 name = "fpv-tools"
 version = "0.2.0"
-description = "Read and inspect Betaflight flight controllers over USB/MSP"
+description = "Betaflight flight controllers and their blackbox logs from the command line"
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -9,6 +9,15 @@ authors = [
     { name = "Tobias Hoffmann", email = "garbaz.github@pm.me" }
 ]
 requires-python = ">=3.12"
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Hardware",
+]
 dependencies = [
     "construct>=2.10.70",
     "construct-typing>=0.8.1",
@@ -18,6 +27,11 @@ dependencies = [
     "rich>=15.0.0",
     "scipy>=1.18.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/Garbaz/fpv-tools"
+Changelog = "https://github.com/Garbaz/fpv-tools/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Garbaz/fpv-tools/issues"
 
 [project.scripts]
 fpv-tools = "fpv_tools.app:main"

@@ -1,6 +1,9 @@
 # fpv-tools
 
-‖ [__PyPI__](https://pypi.org/project/fpv-tools/) ‖ [__Changelog__](CHANGELOG.md) ‖
+[![PyPI](https://img.shields.io/pypi/v/fpv-tools)](https://pypi.org/project/fpv-tools/)
+[![Python](https://img.shields.io/pypi/pyversions/fpv-tools)](https://pypi.org/project/fpv-tools/)
+[![CI](https://img.shields.io/github/actions/workflow/status/Garbaz/fpv-tools/ci.yml?branch=main&label=CI)](https://github.com/Garbaz/fpv-tools/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/fpv-tools)](LICENSE)
 
 Betaflight flight controllers and their blackbox logs from the command line.
 
