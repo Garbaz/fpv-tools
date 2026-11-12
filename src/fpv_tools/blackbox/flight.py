@@ -185,7 +185,7 @@ class Flight:
             case _ if name in self.fields:
                 return self.fields[name]
             case _:
-                raise SignalError(f"unknown signal {name!r} (`fpv bb info --signals` lists them)")
+                raise SignalError(f"unknown signal {name!r} (`fpv-tools bb info --signals` lists them)")
 
     def _modes(self) -> Array:
         p = self.profile

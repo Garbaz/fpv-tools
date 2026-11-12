@@ -1,4 +1,4 @@
-"""`fpv cli` and `fpv msp`: the flight controller's own interfaces."""
+"""`fpv-tools cli` and `fpv-tools msp`: the flight controller's own interfaces."""
 
 import contextlib
 import shlex
@@ -36,9 +36,9 @@ def cli(
     echoes and prompts. Afterwards the FC reboots, dropping changes not saved, unless --save or --no-reboot. A
     `diff all` export ends with `save`, so feeding it back in restores it:
 
-        fpv cli 'diff all' > config.txt
-        fpv cli < config.txt
-        fpv cli 'set vbat_warning_cell_voltage = 350' --save
+        fpv-tools cli 'diff all' > config.txt
+        fpv-tools cli < config.txt
+        fpv-tools cli 'set vbat_warning_cell_voltage = 350' --save
 
     Parameters
     ----------
@@ -132,10 +132,10 @@ def msp(
     NAME=VALUE fields and reply with named fields; others take values packed by --struct, and reply in hex or as
     unpacked by --reply. Without MESSAGE, requests are read from stdin, one per line.
 
-        fpv msp MSP_ATTITUDE --every 0.1
-        fpv msp MSP2_GET_TEXT type=PILOT_NAME
-        fpv msp MSP_MOTOR --reply H
-        fpv msp MSP2_SET_TEXT type=CRAFT_NAME text=Whoop --save
+        fpv-tools msp MSP_ATTITUDE --every 0.1
+        fpv-tools msp MSP2_GET_TEXT type=PILOT_NAME
+        fpv-tools msp MSP_MOTOR --reply H
+        fpv-tools msp MSP2_SET_TEXT type=CRAFT_NAME text=Whoop --save
 
     The FC is left as found: afterwards it reboots to undo what the messages changed in RAM (settings, and runtime
     state such as motor outputs or the clock), unless --save or --no-reboot. Messages that cannot be undone (e.g.
@@ -201,7 +201,7 @@ def msp(
         except KeyboardInterrupt:
             pass
         except Exception:
-            # As `fpv cli` does after a failed command: --save does not apply
+            # As `fpv-tools cli` does after a failed command: --save does not apply
             try:
                 if not rebooted and _leave(fc, pending, False, no_reboot) and save:
                     warnings.warn("--save not applied", stacklevel=1)
@@ -225,11 +225,12 @@ def _check(codes: list[int], *, save: bool, no_reboot: bool, every: float | None
     effects = [effect(name) for name in names]
     for i, (code, name, e) in enumerate(zip(codes, names, effects, strict=True)):
         if code not in NAMES:
-            warnings.warn(f"{name} is not a Betaflight message fpv knows: nothing it changes is undone", stacklevel=1)
+            message = f"{name} is not a Betaflight message fpv-tools knows: nothing it changes is undone"
+            warnings.warn(message, stacklevel=1)
         if e is None:
             continue
         if e.kind is Kind.PASSTHROUGH:
-            raise ValueError(f"{name} {e.kind.value}: fpv msp cannot talk through it")
+            raise ValueError(f"{name} {e.kind.value}: fpv-tools msp cannot talk through it")
         if e.reboots and (i < len(codes) - 1 or every is not None):
             raise ValueError(f"{name} reboots the FC: it can only be the last request, sent once")
         if e.reboots and (save or no_reboot):

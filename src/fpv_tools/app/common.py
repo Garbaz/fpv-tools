@@ -33,7 +33,7 @@ IGNORE_VERSION = f"Read logs from firmware releases other than {', '.join(suppor
 
 SETTINGS = Group(
     "FC settings",
-    help="Some signals need FC settings the log does not record (`fpv bb --help` marks them).",
+    help="Some signals need FC settings the log does not record (`fpv-tools bb --help` marks them).",
     sort_key=1,
 )
 

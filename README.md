@@ -1,64 +1,86 @@
 # fpv-tools
 
-Command-line tools for Betaflight flight controllers and their blackbox logs:
+‖ [__PyPI__](https://pypi.org/project/fpv-tools/) ‖ [__Changelog__](CHANGELOG.md) ‖
 
-- `fpv cli` runs commands in the flight controller's CLI, e.g. to back up and restore its configuration
-- `fpv msp` sends any MSP message and prints the reply, decoded to named fields where the layout is known
-- `fpv bb` pulls blackbox logs off the onboard flash and analyses them: statistics, events, spectra, step response,
-  CSV export
+Betaflight flight controllers and their blackbox logs from the command line.
 
-```sh
-fpv cli 'diff all' > config.txt                  # back up
-fpv cli < config.txt                             # restore (the export ends with `save`)
-fpv msp MSP_RC --every 0.05 --changes            # poll, print only changes
-
-fpv bb pull -O logs/                             # copy the onboard flash, named like Betaflight's app does
-fpv bb info logs/                                # firmware, craft, flights, events
-fpv bb stats LOG -s vbat -s amps --when 'thr > 5'
-fpv bb spectrum LOG -s gyro_raw.roll --vs-throttle 10
-fpv bb export LOG -s thr -s gyro.roll -o flight.csv
-```
-
-The flight controller is left as found: after commands that change something it reboots to drop the changes,
-unless `--save` stores them or `--no-reboot` keeps them until power-off. Anything that cannot be undone, such as
-erasing the flash, asks first.
-
-Some log signals need settings the log does not record, such as the battery alarm settings. These come from a
-`dump all` export (`--config`), the flight controller (`--config-from-fc`) or `--set KEY=VALUE`; there are no
-built-in defaults. `fpv bb --help` lists the signals and the `--when` condition syntax.
+- **The flight controller's own interfaces**: any CLI command or MSP message, with the flight controller left as
+  found unless changes are saved
+- **Blackbox logs as signals to query**: physical units, conditions to select moments of a flight, statistics,
+  spectra and step response, and values the flight controller computed but did not log
+- **Faithful to the firmware**: log decoding, MSP layouts and the flight controller's calculations follow the
+  Betaflight source of each release (4.5, 2025.12 and 2026.6)
 
 ## Install
 
-Needs Python 3.12 or newer.
+Run it with [uv](https://docs.astral.sh/uv/), no install needed:
 
 ```sh
-uv tool install fpv-tools                               # or: pipx install fpv-tools
-uv tool install git+https://github.com/Garbaz/fpv-tools  # the latest, unreleased
+uvx fpv-tools --help
 ```
 
-Supports Betaflight 4.5, 2025.12 and 2026.6. Developed with a BETAFPV G473 flight controller on Betaflight 2026.6.
+Or install it as a tool:
+
+```sh
+uv tool install fpv-tools
+```
+
+## Usage
+
+### Flight controller
+
+```sh
+uvx fpv-tools cli status 'get vbat'                               # CLI commands
+uvx fpv-tools cli 'diff all' > config.txt                         # a backup,
+uvx fpv-tools cli < config.txt                                    # and its restore
+uvx fpv-tools msp MSP_RC --every 0.05 --changes                   # poll a message
+uvx fpv-tools msp MSP2_GET_TEXT type=PILOT_NAME --json            # fields as JSON
+uvx fpv-tools msp MSP2_SET_TEXT type=CRAFT_NAME text=Whoop --save # change and save
+```
+
+Changes are temporary unless saved: the flight controller reboots afterwards and comes back as it was. Use `--save`
+to store them, or `--no-reboot` to keep them until power-off. Irreversible operations, such as erasing the flash,
+ask for confirmation first.
+
+### Blackbox logs
+
+```sh
+uvx fpv-tools bb pull -O logs/                                    # download from the onboard flash
+uvx fpv-tools bb info logs/                                       # firmware, craft, flights and events
+uvx fpv-tools bb changes logs/ -s mode -s failsafe                # every mode and failsafe change
+uvx fpv-tools bb runs logs/ -s acc --when 'acc > 3'               # stretches of high acceleration
+uvx fpv-tools bb stats logs/ -s vbat -s amps --when 'thr > 50'    # battery under load
+uvx fpv-tools bb spectrum logs/ -s gyro_raw.roll --vs-throttle 10 # gyro noise by throttle
+uvx fpv-tools bb step logs/ -s gyro.roll -r setpoint.roll         # how gyro follows setpoint
+uvx fpv-tools bb export logs/ -s thr -s gyro.roll -o flight.csv   # signals as CSV
+```
+
+Some signals need settings the log does not record, such as the battery alarm state, which needs the alarm
+thresholds. They come from a `dump all` export, the flight controller itself, or the command line:
+
+```sh
+uvx fpv-tools cli 'dump all' > dump.txt
+uvx fpv-tools bb changes logs/ -s battery_state --config dump.txt # the battery alarm as the FC raised it
+```
+
+See `uvx fpv-tools bb --help` for all signals and the condition syntax.
 
 ## Development
 
-Needs [uv](https://docs.astral.sh/uv/). The firmware tables in `src/fpv_tools/firmware/tables/` and the MSP codes
-are generated from a clone of [Betaflight](https://github.com/betaflight/betaflight), which also checks the
-firmware statements fpv-tools reproduces (`scripts/firmware_anchors.py`).
+Needs [uv](https://docs.astral.sh/uv/). The firmware tables and MSP codes are generated from a
+[Betaflight](https://github.com/betaflight/betaflight) source checkout.
 
 ```sh
-uv run pytest                                          # offline tests
-BETAFLIGHT_SOURCE=path/to/betaflight uv run pytest     # also check the tables against the firmware
-FPV_TEST_PORT=/dev/ttyACM0 uv run pytest -m hardware   # read-only checks on a disarmed FC (it cannot arm until rebooted)
-uv run scripts/gen_firmware_tables.py path/to/betaflight
-uv run scripts/gen_msp_codes.py path/to/betaflight
+uv run scripts/gen_firmware_tables.py path/to/betaflight   # regenerate the firmware tables
+uv run scripts/gen_msp_codes.py path/to/betaflight         # regenerate the MSP codes
 ```
-
-To release, bump the version, move the notes under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md) to it, and push
-a matching tag; the release workflow checks them and publishes the release on PyPI and GitHub:
 
 ```sh
-uv version --bump minor                                # or patch, major
-git commit -am "Release $(uv version --short)"
-git tag "v$(uv version --short)" && git push origin main "v$(uv version --short)"
+uv run pytest                                              # tests
+BETAFLIGHT_SOURCE=path/to/betaflight uv run pytest         # including checks against the firmware source
+FPV_TEST_PORT=/dev/ttyACM0 uv run pytest -m hardware       # read-only checks on a connected, disarmed FC
 ```
 
-Licensed GPL-3.0-or-later, like Betaflight, whose log writer and source the decoder and tables follow.
+## License
+
+GNU General Public License v3 or later, see [LICENSE](LICENSE).

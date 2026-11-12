@@ -1,4 +1,4 @@
-"""`fpv bb`: blackbox logs.
+"""`fpv-tools bb`: blackbox logs.
 
 numpy, the decoder and the FC link are imported where a command needs them, so that `--help` is quick.
 """
@@ -73,7 +73,7 @@ def _flights(logs: tuple[str, ...], options: LogOptions) -> list[Flight]:
 # --- pull, erase ------------------------------------------------------------------------------------------------
 
 
-@app.command(usage="Usage: fpv bb pull [OPTIONS] [FILE]")
+@app.command(usage="Usage: fpv-tools bb pull [OPTIONS] [FILE]")
 def pull(
     file: Annotated[Path | None, Parameter(allow_leading_hyphen=True)] = None,
     /,
@@ -239,10 +239,10 @@ class Probe:
     """The signals to probe and the samples to look at, shared by the probe commands."""
 
     signal: Annotated[tuple[str, ...], Parameter(name=["--signal", "-s"], metavar="NAME")]
-    "Signal to probe, e.g. gyro.roll, thr, mode (`fpv bb --help` lists them); repeatable."
+    "Signal to probe, e.g. gyro.roll, thr, mode (`fpv-tools bb --help` lists them); repeatable."
 
     when: Annotated[str | None, Parameter(metavar="EXPR")] = None
-    """Only samples where this condition holds, e.g. 'thr > 5 and mode == "ACRO"' (`fpv bb --help` has the
+    """Only samples where this condition holds, e.g. 'thr > 5 and mode == "ACRO"' (`fpv-tools bb --help` has the
     syntax)."""
 
     start: Annotated[Seconds, Parameter(name="--from")] = None
@@ -542,7 +542,7 @@ def export(
     name
         Signals to export; repeatable. Default: all that `bb info --signals` lists.
     when
-        Only rows where this condition holds (`fpv bb --help` has the syntax).
+        Only rows where this condition holds (`fpv-tools bb --help` has the syntax).
     start
         Only from this time (s since the flight's first frame).
     end

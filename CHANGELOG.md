@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The command is now `fpv-tools` instead of `fpv`, so `uvx fpv-tools` runs it without installing.
+
 ## [0.1.0] - 2026-11-12
 
 First release.

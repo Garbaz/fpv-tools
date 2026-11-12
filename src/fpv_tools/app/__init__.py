@@ -1,4 +1,4 @@
-"""The `fpv` command."""
+"""The `fpv-tools` command."""
 
 import sys
 import warnings
@@ -17,19 +17,19 @@ def _shown_default(value: object) -> str | None:
 
 
 app = App(
-    name="fpv",
+    name="fpv-tools",
     help="Talk to Betaflight flight controllers and analyse their blackbox logs.",
     help_format="plaintext",
     group_parameters="Options",
     help_formatter=HelpFormatter(),
-    # Errors as one line like fpv's own: no box, and wrapped by the terminal rather than at the window width
+    # Errors as one line like the other messages: no box, and wrapped by the terminal rather than at the window width
     error_console=Console(stderr=True, soft_wrap=True),
-    error_formatter=lambda e: Text(f"fpv: {e}"),
+    error_formatter=lambda e: Text(f"fpv-tools: {e}"),
     # Flags are opt-in: no generated --no-X / --empty-X
     default_parameter=Parameter(negative=(), show_default=_shown_default),
 )
-app.command(fc.cli, usage="Usage: fpv cli [OPTIONS] [COMMANDS...]")
-app.command(fc.msp, usage="Usage: fpv msp [OPTIONS] [MESSAGE [FIELDS...]]")
+app.command(fc.cli, usage="Usage: fpv-tools cli [OPTIONS] [COMMANDS...]")
+app.command(fc.msp, usage="Usage: fpv-tools msp [OPTIONS] [MESSAGE [FIELDS...]]")
 app.command(bb.app)
 
 
@@ -41,7 +41,7 @@ def _warning(
     file: object = None,
     line: str | None = None,
 ) -> None:
-    print(f"fpv: warning: {message}", file=sys.stderr)
+    print(f"fpv-tools: warning: {message}", file=sys.stderr)
 
 
 def _expected_errors() -> tuple[type[Exception], ...]:
@@ -86,6 +86,6 @@ def main() -> int:
     except Exception as e:
         if not isinstance(e, _expected_errors()):
             raise
-        print(f"fpv: {e}", file=sys.stderr)
+        print(f"fpv-tools: {e}", file=sys.stderr)
         return 1
     return 0

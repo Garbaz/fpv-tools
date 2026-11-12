@@ -1,4 +1,4 @@
-"""What MSP messages change on the FC, and so what `fpv msp` has to do about it at the end.
+"""What MSP messages change on the FC, and so what `fpv-tools msp` has to do about it at the end.
 
 Read by hand from each message's handler in msp/msp.c (line numbers at 2026.6) and what it calls. Every message the
 firmware's inbound handlers take (fc/msp_codes.py INBOUND, generated) must be listed; tests check that. Messages

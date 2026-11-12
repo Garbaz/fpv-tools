@@ -51,7 +51,7 @@ def _fc_2026_6(code: int, payload: bytes) -> bytes:
 
 
 def _run(monkeypatch: pytest.MonkeyPatch, *request: str, fake: FakeMsp | None = None, **options: Any) -> list[str]:
-    """`fpv msp` against a fake FC; the names of the messages it sent, other than the version query."""
+    """`fpv-tools msp` against a fake FC; the names of the messages it sent, other than the version query."""
     fake = fake or FakeMsp(_fc_2026_6)
 
     def open_port(*_: object) -> contextlib.nullcontext[FakeMsp]:

@@ -1,4 +1,4 @@
-"""What users can name in `fpv bb`: signals and conditions. Plain text for the help; imports nothing, so help
+"""What users can name in `fpv-tools bb`: signals and conditions. Plain text for the help; imports nothing, so help
 stays fast."""
 
 SIGNALS = """\
