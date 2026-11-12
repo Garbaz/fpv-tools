@@ -1,9 +1,10 @@
 # fpv-tools
 
+[![GitHub](https://img.shields.io/badge/GitHub-Garbaz%2Ffpv--tools-blue?logo=github)](https://github.com/Garbaz/fpv-tools)
 [![PyPI](https://img.shields.io/pypi/v/fpv-tools)](https://pypi.org/project/fpv-tools/)
-[![Python](https://img.shields.io/pypi/pyversions/fpv-tools)](https://pypi.org/project/fpv-tools/)
+[![Python](https://img.shields.io/pypi/pyversions/fpv-tools?label=python)](https://pypi.org/project/fpv-tools/)
 [![CI](https://img.shields.io/github/actions/workflow/status/Garbaz/fpv-tools/ci.yml?branch=main&label=CI)](https://github.com/Garbaz/fpv-tools/actions/workflows/ci.yml)
-[![License](https://img.shields.io/pypi/l/fpv-tools)](LICENSE)
+[![License](https://img.shields.io/pypi/l/fpv-tools)](https://github.com/Garbaz/fpv-tools/blob/main/LICENSE)
 
 Betaflight flight controllers and their blackbox logs from the command line.
 
@@ -86,4 +87,4 @@ FPV_TEST_PORT=/dev/ttyACM0 uv run pytest -m hardware       # read-only checks on
 
 ## License
 
-GNU General Public License v3 or later, see [LICENSE](LICENSE).
+GNU General Public License v3 or later, see [LICENSE](https://github.com/Garbaz/fpv-tools/blob/main/LICENSE).
