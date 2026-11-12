@@ -1,6 +1,6 @@
 [project]
 name = "fpv-tools"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read and inspect Betaflight flight controllers over USB/MSP"
 readme = "README.md"
 license = "GPL-3.0-or-later"

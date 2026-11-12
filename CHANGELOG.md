@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
 ### Changed
 
 - The command is now `fpv-tools` instead of `fpv`, so `uvx fpv-tools` runs it without installing.
@@ -22,5 +24,6 @@ First release.
   `export`), with a decoder that keeps all log events.
 - Support for Betaflight 4.5, 2025.12 and 2026.6, with tables generated from the firmware source.
 
-[Unreleased]: https://github.com/Garbaz/fpv-tools/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Garbaz/fpv-tools/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Garbaz/fpv-tools/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Garbaz/fpv-tools/releases/tag/v0.1.0
