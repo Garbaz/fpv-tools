@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The README's links on PyPI, and a link to the repository.
+
 ## [0.2.1] - 2026-11-12
 
 ### Fixed
