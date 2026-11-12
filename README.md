@@ -34,9 +34,9 @@ uv tool install fpv-tools
 ### Flight controller
 
 ```sh
-uvx fpv-tools cli 'status' 'get vbat'                             # CLI commands
-uvx fpv-tools cli 'diff all' > config.txt                         # a backup,
-uvx fpv-tools cli < config.txt                                    # and its restore
+uvx fpv-tools cli 'status' 'get profile' 'get bat'                # CLI commands
+uvx fpv-tools cli 'diff all' > config.txt                         # config backup
+uvx fpv-tools cli < config.txt                                    # and restore it
 uvx fpv-tools msp MSP_RC --every 0.05 --changes                   # poll a message
 uvx fpv-tools msp MSP2_GET_TEXT type=PILOT_NAME --json            # fields as JSON
 uvx fpv-tools msp MSP2_SET_TEXT type=CRAFT_NAME text=Whoop --save # change and save
@@ -63,8 +63,8 @@ Some signals need settings the log does not record, such as the battery alarm st
 thresholds. They come from a `dump all` export, the flight controller itself, or the command line:
 
 ```sh
-uvx fpv-tools cli 'dump all' > dump.txt
-uvx fpv-tools bb changes logs/ -s battery_state --config dump.txt # the battery alarm as the FC raised it
+uvx fpv-tools cli 'dump all' > config_dump.txt
+uvx fpv-tools bb changes logs/ -s battery_state --config config_dump.txt # the battery alarm as the FC raised it
 ```
 
 See `uvx fpv-tools bb --help` for all signals and the condition syntax.
