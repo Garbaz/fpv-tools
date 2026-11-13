@@ -244,4 +244,18 @@ ANCHORS: dict[str, list[Anchor]] = {
             "uint8_t flags = MSP_FLASHFS_FLAG_SUPPORTED; flags |= (flashfsIsReady() ? MSP_FLASHFS_FLAG_READY : 0);",
         ),
     ],
+    "leaving an unconfirmed CLI session (Session._leave_unconfirmed in fc/console.py)": [
+        # Outside an MSP frame only '#', 0x02 and the reboot character act; a later unrecognised byte cancels a
+        # pending reboot to the bootloader
+        (
+            "src/main/msp/msp_serial.c",
+            "if (c == serialConfig()->reboot_character) { mspPort->pendingRequest = MSP_PENDING_BOOTLOADER_ROM;",
+        ),
+        (
+            "src/main/msp/msp_serial.c",
+            "} else if (mspPort->pendingRequest == MSP_PENDING_BOOTLOADER_ROM) { "
+            "mspPort->pendingRequest = MSP_PENDING_NONE; }",
+        ),
+        ("src/main/cli/settings.c", '{ "reboot_character", VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 48, 126 }'),
+    ],
 }

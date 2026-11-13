@@ -50,6 +50,12 @@ def name_of(code: int) -> str:
     return NAMES.get(code, f"0x{code:04x}")
 
 
+CLI_ECHO = (
+    "the flight controller echoed the request back instead of answering: it is in its CLI (left there by another "
+    "program or a cut-off session), where MSP goes unheard; `fpv-tools cli version` leaves it, rebooting the FC"
+)
+
+
 def read_frame(stream: Stream, expected: int, max_skip: int = 4096) -> bytes:
     """Read frames until the reply to `expected` arrives; return its payload."""
     skipped = 0
@@ -60,12 +66,19 @@ def read_frame(stream: Stream, expected: int, max_skip: int = 4096) -> bytes:
         if _read_exact(stream, 1) != b"X":
             continue
         direction = _read_exact(stream, 1)
-        header = _read_exact(stream, 5)
-        _flag, code, size = struct.unpack("<BHH", header)
-        payload = _read_exact(stream, size)
-        (crc,) = _read_exact(stream, 1)
-        if crc != crc8_dvb_s2(header + payload):
-            raise MspError(f"CRC mismatch in reply to {name_of(code)}")
+        try:
+            header = _read_exact(stream, 5)
+            _flag, code, size = struct.unpack("<BHH", header)
+            payload = _read_exact(stream, size)
+            (crc,) = _read_exact(stream, 1)
+            if crc != crc8_dvb_s2(header + payload):
+                raise MspError(f"CRC mismatch in reply to {name_of(code)}")
+        except MspError as e:
+            # The FC never sends '<'. A request coming back broken is the CLI echoing what it reads as typed
+            # text: printable bytes only (cli.c cliProcess)
+            if direction == b"<":
+                raise MspError(CLI_ECHO) from e
+            raise
         if code != expected or direction not in (b">", b"!"):
             continue  # stale reply or echoed request
         if direction == b"!":

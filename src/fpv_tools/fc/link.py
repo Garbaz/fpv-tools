@@ -1,9 +1,10 @@
 """Finding and opening the flight controller's USB serial port, and seeing it come back after a reboot."""
 
+import contextlib
 import errno
 import os
 import time
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import serial
 from serial.tools import list_ports
@@ -56,13 +57,52 @@ def find_port() -> str:
 
 
 def open_port(port: str | None = None, timeout: float = 1.0) -> serial.Serial:
+    """The port, opened for this process alone: while it is open, another program (the Betaflight app, a second
+    fpv-tools) cannot open it and talk to the FC in between; one that already has it fails this."""
     port = port or find_port()
     try:
-        return serial.Serial(port, 115200, timeout=timeout, write_timeout=timeout)
+        return _Exclusive(port, 115200, timeout=timeout, write_timeout=timeout)
     except serial.SerialException as e:
-        if e.errno == errno.EBUSY:
+        if _busy(e):
             raise LinkError(f"{port} is busy: another program (e.g. the Betaflight app) has it open") from e
         raise LinkError(str(e)) from e
+
+
+class _Exclusive(serial.Serial):
+    """A serial port no other program can open while this one has it. Windows opens serial ports exclusively
+    anyway. POSIX does not: TIOCEXCL refuses further opens of the tty (what Chromium sets for the Betaflight app;
+    root is exempt), and pyserial's flock covers programs that take that lock instead. The kernel keeps TIOCEXCL
+    until the tty's last close, which another program's open file would delay, so closing releases it."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, exclusive=True if os.name == "posix" else None, **kwargs)
+
+    def open(self) -> None:
+        super().open()
+        if os.name == "posix":
+            import fcntl
+            import termios
+
+            try:
+                fcntl.ioctl(self.fileno(), termios.TIOCEXCL)
+            except OSError as e:
+                super().close()
+                raise serial.SerialException(e.errno, f"could not keep other programs off {self.port}: {e}") from e
+
+    def close(self) -> None:
+        if os.name == "posix" and self.is_open:
+            import fcntl
+            import termios
+
+            with contextlib.suppress(OSError):
+                fcntl.ioctl(self.fileno(), termios.TIOCNXCL)
+        super().close()
+
+
+def _busy(e: serial.SerialException) -> bool:
+    """Whether opening failed because another program has the port: EBUSY (TIOCEXCL), EAGAIN (flock), or on
+    Windows access denied, which pyserial reports in its message only (serialwin32.py: the WinError repr)."""
+    return e.errno in (errno.EBUSY, errno.EAGAIN, errno.EWOULDBLOCK) or "PermissionError(13," in str(e)
 
 
 def _same(device: str, other: str) -> bool:

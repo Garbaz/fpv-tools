@@ -296,3 +296,32 @@ def test_printed_mode_ranges_set_the_same_range(
     fake = FakeMsp(_fc_2026_6)
     _run(monkeypatch, "MSP_SET_MODE_RANGE", "index=1", *printed[1].split(), fake=fake, no_reboot=True)
     assert (CODES["MSP_SET_MODE_RANGE"], bytes([1, 13, 3, 16, 32])) in fake.requests
+
+
+def test_an_fc_in_its_cli_is_told_from_a_timeout() -> None:
+    # An FC in its CLI echoes printable bytes of what it reads as typed text (cli.c cliProcess) and answers no MSP
+    class InCli:
+        buffer = bytearray()
+
+        def write(self, data: bytes, /) -> int:
+            self.buffer += bytes(b for b in data if 32 <= b <= 126)
+            return len(data)
+
+        def read(self, size: int = 1, /) -> bytes:
+            data = bytes(self.buffer[:size])
+            del self.buffer[:size]
+            return data
+
+    with pytest.raises(MspError, match="in its CLI"):
+        MspClient(InCli()).request(CODES["MSP_FC_VERSION"])
+    # An FC that is simply silent is a timeout
+    with pytest.raises(MspError, match="timed out"):
+        MspClient(_Silent()).request(CODES["MSP_FC_VERSION"])
+
+
+class _Silent:
+    def write(self, data: bytes, /) -> int:
+        return len(data)
+
+    def read(self, size: int = 1, /) -> bytes:
+        return b""

@@ -16,6 +16,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   between the firmware's steps, or one outside its range (mode ranges 900us..2100us) is refused, never rounded.
 - A layout for `MSP_SET_MODE_RANGE`, e.g. `mode=ANGLE aux_channel=AUX2 start=1700us end=2100us`.
 
+### Fixed
+
+- fpv-tools keeps other programs off the FC's port while it uses it. On Linux and macOS another program (e.g.
+  the Betaflight app) could open it meanwhile and talk to the FC in between, which once left the FC in its CLI.
+- If entering the CLI isn't confirmed, `fpv-tools cli` sends `exit` before giving up, so the FC isn't left in its
+  CLI, where it ignores MSP.
+- `fpv-tools msp` says when the FC is in its CLI (it echoes the request back) instead of only timing out.
+
 ### Changed
 
 - `fpv-tools msp --raw` now shows and takes known fields as sent (numbers). Hex output is now `--hex`.

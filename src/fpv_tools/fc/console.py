@@ -9,6 +9,7 @@ Commands are sent as given. Whether one ended the session is told from the FC's 
 prints "Rebooting" (cliRebootEx) or "# leaving CLI mode, ..." (cliExitCmd) instead of a prompt, or drops off USB.
 """
 
+import contextlib
 import time
 from enum import StrEnum
 from typing import Self
@@ -51,15 +52,27 @@ class Session:
         self._drain()
         # From MSP mode, '#' enters the CLI: banner, then prompt. If the FC is still in the CLI (a session that was
         # cut off), '#' is only echoed as the start of a comment line; an empty line then completes it with a prompt.
-        self.stream.write(b"#")
-        _, prompt = self._read_until_prompt(self.timeout, echo_only=b"#")
-        if not prompt:
-            self.stream.write(b"\r\n")
-            _, prompt = self._read_until_prompt(self.timeout)
-        if not prompt:
-            raise ConsoleError("could not enter the CLI")
+        try:
+            self.stream.write(b"#")
+            _, prompt = self._read_until_prompt(self.timeout, echo_only=b"#")
+            if not prompt:
+                self.stream.write(b"\r\n")
+                _, prompt = self._read_until_prompt(self.timeout)
+            if not prompt:
+                raise ConsoleError("could not enter the CLI")
+        except ConsoleError as e:
+            self._leave_unconfirmed()
+            raise ConsoleError(f"{e}; sent `exit` in case the FC entered it anyway (it reboots if so)") from e
         self.active = True
         return self
+
+    def _leave_unconfirmed(self) -> None:
+        """Leave a CLI that '#' may have entered without the prompt being seen (e.g. another program on the port
+        read it), so the FC is not left in the CLI, deaf to MSP. If the FC is in MSP mode instead, these bytes do
+        nothing: outside a frame it acts only on '#', 0x02 and the reboot character, and a pending reboot is
+        cancelled by any later byte, here the final newline (msp_serial.c, anchored)."""
+        with contextlib.suppress(OSError):
+            self.stream.write(b"exit\r\n")
 
     def __exit__(self, exc_type: type[BaseException] | None, *_: object) -> None:
         # Never save on an error; otherwise the caller has already closed with its choice

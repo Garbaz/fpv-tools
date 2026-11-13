@@ -4,7 +4,7 @@ import pytest
 
 from fakes import FakeCli
 from fpv_tools.app import fc
-from fpv_tools.fc.console import End, Session
+from fpv_tools.fc.console import ConsoleError, End, Session
 
 # A dump has the prompt's characters ("\r\n# ") at the start of its comment lines
 DUMP = "# version\r\n# Betaflight / STM32G47X (G473) 2026.6.0-alpha\r\n\r\n# master\r\nset vbat_hysteresis = 1"
@@ -65,3 +65,21 @@ def test_fpv_cli_does_not_save_after_a_failed_command(monkeypatch: pytest.Monkey
         fc.cli("set x = 1", "set y = 2", "get x", save=True)
     assert "get x\r\n" not in fake.written and "save\r\n" not in fake.written
     assert fake.written[-1] == "exit\r\n"  # the reboot drops the change that did apply
+
+
+def test_a_cli_entered_without_its_prompt_is_left() -> None:
+    # Seen on a real FC: '#' entered the CLI, but another program on the port read the banner and prompt, so all
+    # that came back was the echo of its MSP request. Design: the FC is not left in the CLI, deaf to MSP.
+    class Shared(FakeCli):
+        def write(self, data: bytes, /) -> int:
+            if data == b"#" and not self.in_cli:
+                self.in_cli = True
+                self.written.append("#")
+                self.buffer += b"$M<"
+                return 1
+            return super().write(data)
+
+    fake = Shared({})
+    with pytest.raises(ConsoleError, match="sent `exit`"):
+        Session(fake, timeout=0.3).__enter__()
+    assert fake.written[-1] == "exit\r\n" and fake.rebooted

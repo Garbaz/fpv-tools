@@ -1,6 +1,9 @@
+import os
+import pty
 from collections.abc import Iterator
 
 import pytest
+import serial
 from serial.tools.list_ports_common import ListPortInfo
 
 from fpv_tools.fc import link
@@ -46,3 +49,32 @@ def test_waiting_for_the_fc_to_come_back(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(link, "GONE_S", 0.0)
     _comports(monkeypatch, [FC])
     assert link.await_return(identity) is None  # never left
+
+
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="POSIX pseudo-terminal; root ignores TIOCEXCL")
+def test_the_port_is_kept_from_other_programs() -> None:
+    # Design: while fpv-tools talks to the FC, nothing else may (the Betaflight app connecting in between left the
+    # FC in its CLI). A pseudo-terminal stands in for the FC's port.
+    controller, device = pty.openpty()
+    path = os.ttyname(device)
+    try:
+        with link.open_port(path):
+            with pytest.raises(serial.SerialException):  # another program, opening it plainly
+                serial.Serial(path)
+            with pytest.raises(link.LinkError, match="busy"):  # a second fpv-tools
+                link.open_port(path)
+        link.open_port(path).close()  # free again once closed
+    finally:
+        os.close(controller)
+        os.close(device)
+
+
+def test_a_port_in_use_on_windows_is_reported_busy(monkeypatch: pytest.MonkeyPatch) -> None:
+    # pyserial on Windows reports a port another program holds with the WinError in its message, no errno
+    # (serialwin32.py; ERROR_ACCESS_DENIED maps to PermissionError)
+    def in_use(_: object) -> None:
+        raise serial.SerialException("could not open port 'COM3': PermissionError(13, 'Access is denied.', None, 5)")
+
+    monkeypatch.setattr(link._Exclusive, "open", in_use)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(link.LinkError, match="busy"):
+        link.open_port("COM3")
