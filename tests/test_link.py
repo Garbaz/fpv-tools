@@ -1,5 +1,4 @@
 import os
-import pty
 from collections.abc import Iterator
 
 import pytest
@@ -55,6 +54,8 @@ def test_waiting_for_the_fc_to_come_back(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_the_port_is_kept_from_other_programs() -> None:
     # Design: while fpv-tools talks to the FC, nothing else may (the Betaflight app connecting in between left the
     # FC in its CLI). A pseudo-terminal stands in for the FC's port.
+    import pty  # POSIX only
+
     controller, device = pty.openpty()
     path = os.ttyname(device)
     try:

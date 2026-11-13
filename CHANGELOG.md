@@ -34,6 +34,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - MSP field names follow their meaning: `MSP_MODE_RANGES` has `mode`, `start` and `end` (were `permanent_id`,
   `start_step` and `end_step`), and `MSP_BOXIDS` has `modes` (was `permanent_ids`). `MSP_RC` channels are
   named (`ROLL=1500,...`).
+- `fpv-tools msp` text output: a reply with one field prints as `NAME  VALUE` like longer ones (was `NAME=VALUE`),
+  and lists, `--reply` values included, are comma-separated (were space-separated). Scripts should read `--json`.
 
 ## [0.2.3] - 2026-11-12
 
