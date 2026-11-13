@@ -13,6 +13,7 @@ from fpv_tools.fc import codec, dataflash
 from fpv_tools.fc.msp import MspClient, MspError, crc8_dvb_s2, encode_frame
 from fpv_tools.fc.msp_codes import CODES, INBOUND, NAMES
 from fpv_tools.firmware import PROFILES
+from fpv_tools.firmware.layout import Names
 from fpv_tools.firmware.msp_effects import EFFECTS
 
 
@@ -121,24 +122,85 @@ def test_every_inbound_message_has_a_known_effect() -> None:
 
 
 def test_fields_from_the_command_line() -> None:
-    # Design: numbers in any base, enum names, text, and lists comma-separated
-    layout = c.Struct(
-        "mode" / c.Enum(c.Int8ul, A=1, B=2), "ids" / c.Array(3, c.Int16ul), "name" / c.PascalString(c.Int8ul, "ascii")
+    # Design: numbers in any base, text, and lists comma-separated; names where the field has them
+    layout = c.Struct("mode" / c.Int8ul, "ids" / c.Array(3, c.Int16ul), "name" / c.PascalString(c.Int8ul, "ascii"))
+    meaning = {"mode": Names({1: "A", 2: "B"})}
+    assert codec.build(layout, {"mode": "B", "ids": "1,0x10,300", "name": "HI"}, meaning) == (
+        bytes([2, 1, 0, 16, 0, 44, 1, 2]) + b"HI"
     )
-    assert (
-        codec.build(layout, {"mode": "B", "ids": "1,0x10,300", "name": "HI"})
-        == bytes([2, 1, 0, 16, 0, 44, 1, 2]) + b"HI"
-    )
+    # Values without a name are given as numbers, as they are printed
+    assert codec.build(layout, {"mode": "7"}, meaning) == bytes([7])
+
+
+def test_values_are_what_the_firmware_means() -> None:
+    profile = PROFILES[2026, 6]
+    # This FC's CLI prints "aux 3 13 3 1700 2100 0 0": the beeper (permanent ID 13, msp_box.c) on AUX4 (aux channel
+    # index 3) from 1700 to 2100 us. MSP carries the range in steps: (us - 900) / 25 (CHANNEL_VALUE_TO_STEP).
+    ranges = profile.msp["MSP_MODE_RANGES"]
+    assert codec.parse(ranges.reply, bytes([13, 3, 32, 48]), ranges.meaning) == {
+        "ranges": [{"mode": "BEEPERON", "aux_channel": "AUX4", "start": 1700, "end": 2100}]
+    }
+    # Design: --raw is the values as sent
+    assert codec.parse(ranges.reply, bytes([13, 3, 32, 48])) == {
+        "ranges": [{"mode": 13, "aux_channel": 3, "start": 32, "end": 48}]
+    }
+    # Setting it takes the same values (msp.c MSP_SET_MODE_RANGE reads index, permanent ID, aux index, steps)
+    set_range = profile.msp["MSP_SET_MODE_RANGE"]
+    fields = {"index": "3", "mode": "BEEPERON", "aux_channel": "AUX4", "start": "1700", "end": "2100"}
+    assert codec.build(set_range.request, fields, set_range.meaning) == bytes([3, 13, 3, 32, 48])
+    # Design: input that is not exact is refused, never rounded; and a number that has a name is refused, as it
+    # could be meant in another numbering (AUX4 is index 3)
+    with pytest.raises(codec.CodecError, match="steps of 25 us"):
+        codec.build(set_range.request, fields | {"start": "1710"}, set_range.meaning)
+    with pytest.raises(codec.CodecError, match="AUX4"):
+        codec.build(set_range.request, fields | {"aux_channel": "3"}, set_range.meaning)
+
+
+def test_rc_channels_are_named_in_firmware_order() -> None:
+    # rcData is in rc_alias_e order: roll, pitch, yaw, throttle, then the aux channels
+    rc = PROFILES[2026, 6].msp["MSP_RC"]
+    values = [1500, 1501, 1502, 990, 1000, 1508, 2000]
+    reply = codec.parse(rc.reply, b"".join(v.to_bytes(2, "little") for v in values), rc.meaning)
+    assert reply == {
+        "channels": {
+            "ROLL": 1500,
+            "PITCH": 1501,
+            "YAW": 1502,
+            "THROTTLE": 990,
+            "AUX1": 1000,
+            "AUX2": 1508,
+            "AUX3": 2000,
+        }
+    }
 
 
 def test_layouts_on_real_replies() -> None:
-    # Captured from a 2026.6.0-alpha FC
+    # Captured from a 2026.6.0-alpha FC whose CLI said vtx_low_power_disarm = OFF and vtx_freq = 5733
     vtx = bytes([3, 2, 1, 5, 0]) + (5733).to_bytes(2, "little") + bytes([1, 0, 0, 0, 1, 6, 8, 5])
-    reply = codec.parse(PROFILES[2026, 6].msp["MSP_VTX_CONFIG"].reply, vtx)
-    assert reply["frequency"] == 5733 and reply["vtxtable_power_levels"] == 5
+    layout = PROFILES[2026, 6].msp["MSP_VTX_CONFIG"]
+    reply = codec.parse(layout.reply, vtx, layout.meaning)
+    assert reply["frequency"] == 5733 and reply["low_power_disarm"] == "OFF" and reply["vtxtable_power_levels"] == 5
+    assert layout.units()["frequency"] == "MHz"
     # Custom OSD messages exist from 2025.12; 4.5 knows only text types 1..6
-    assert codec.build(PROFILES[2026, 6].msp["MSP2_SET_TEXT"].request, {"type": "CUSTOM_MSG_0", "text": "HI"}) == (
-        b"\x07\x02HI"
-    )
+    text_2026, text_4_5 = PROFILES[2026, 6].msp["MSP2_SET_TEXT"], PROFILES[4, 5].msp["MSP2_SET_TEXT"]
+    assert codec.build(text_2026.request, {"type": "CUSTOM_MSG_0", "text": "HI"}, text_2026.meaning) == b"\x07\x02HI"
     with pytest.raises(codec.CodecError):
-        codec.build(PROFILES[4, 5].msp["MSP2_SET_TEXT"].request, {"type": "CUSTOM_MSG_0", "text": "HI"})
+        codec.build(text_4_5.request, {"type": "CUSTOM_MSG_0", "text": "HI"}, text_4_5.meaning)
+
+
+def test_replies_as_meant_as_sent_or_as_bytes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # MSP_ANALOG (msp.c): legacy voltage in 0.1 V, mAh drawn, RSSI, current in 0.01 A, voltage in 0.01 V
+    analog = struct.pack("<BHHhH", 161, 250, 1023, 342, 1612)
+
+    def fc(code: int, payload: bytes) -> bytes:
+        return analog if code == CODES["MSP_ANALOG"] else _fc_2026_6(code, payload)
+
+    def lines(**options: Any) -> list[str]:
+        _run(monkeypatch, "MSP_ANALOG", fake=FakeMsp(fc), **options)
+        return [" ".join(line.split()) for line in capsys.readouterr().out.splitlines()]
+
+    assert lines() == ["vbat_legacy 16.1 V", "mah_drawn 250 mAh", "rssi 1023", "amperage 3.42 A", "vbat 16.12 V"]
+    assert lines(raw=True) == ["vbat_legacy 161", "mah_drawn 250", "rssi 1023", "amperage 342", "vbat 1612"]
+    assert lines(as_hex=True) == [f"hex={analog.hex()}"]

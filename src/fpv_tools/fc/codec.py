@@ -1,7 +1,8 @@
 """MSP payloads: named layouts as `construct` structs, ad-hoc ones as `struct` format strings.
 
 Layouts live in the firmware profile (they change between releases). This module converts between payload bytes,
-plain Python values (for printing and JSON), and the text the command line provides.
+plain Python values (for printing and JSON), and the text the command line provides; with a layout's meanings,
+values are what the firmware means by them (names, units) rather than as sent.
 """
 
 from __future__ import annotations
@@ -12,7 +13,8 @@ from typing import Any, cast
 
 import construct as c
 
-type Plain = int | float | str | bool | list[Plain] | dict[str, Plain] | None
+from fpv_tools.firmware.layout import Flags, Meaning, MeaningError, Positions
+from fpv_tools.firmware.layout import Value as Plain
 
 
 class CodecError(Exception):
@@ -20,10 +22,8 @@ class CodecError(Exception):
 
 
 def plain(value: Any) -> Plain:
-    """construct's parse result as plain values: enums by name, bytes as hex, no private keys."""
+    """construct's parse result as plain values: bytes as hex, no private keys."""
     match value:
-        case c.EnumIntegerString():
-            return str(value)
         case dict():
             items: dict[Any, Any] = value  # pyright: ignore[reportUnknownVariableType]
             return {str(k): plain(v) for k, v in items.items() if not str(k).startswith("_")}
@@ -38,16 +38,43 @@ def plain(value: Any) -> Plain:
             return str(value)
 
 
-def parse(layout: c.Struct, data: bytes) -> dict[str, Plain]:
+def parse(layout: c.Struct, data: bytes, meaning: Mapping[str, Meaning] | None = None) -> dict[str, Plain]:
+    """Fields of a payload, as sent or (with meaning) as meant."""
     try:
         result = plain(layout.parse(data))
     except c.ConstructError as e:
         raise CodecError(f"reply does not match the known layout: {e}") from e
+    result = _meant(result, meaning or {})
     return result if isinstance(result, dict) else {"value": result}
 
 
-def build(layout: c.Struct, args: Mapping[str, str]) -> bytes:
-    """Payload from NAME=VALUE arguments. Trailing fields may be left out (MSP requests often have optional tails)."""
+def _meant(value: Plain, meaning: Mapping[str, Meaning]) -> Plain:
+    match value:
+        case dict():
+            return {k: _decode(meaning[k], v) if k in meaning else _meant(v, meaning) for k, v in value.items()}
+        case list():
+            return [_meant(v, meaning) for v in value]
+        case _:
+            return value
+
+
+def _decode(meaning: Meaning, value: Plain) -> Plain:
+    match meaning, value:
+        case Positions(), list():
+            return meaning.decode(cast("list[Any]", value))
+        case Positions(), _:
+            raise CodecError(f"positions of a value that is not a list: {value!r}")
+        case _, list():
+            return [_decode(meaning, v) for v in value]
+        case _, int():
+            return meaning.decode(value)
+        case _:
+            raise CodecError(f"cannot translate {value!r}")
+
+
+def build(layout: c.Struct, args: Mapping[str, str], meaning: Mapping[str, Meaning] | None = None) -> bytes:
+    """Payload from NAME=VALUE arguments, as sent or (with meaning) as meant. Trailing fields may be left out (MSP
+    requests often have optional tails)."""
     fields = [sub for sub in layout.subcons if isinstance(sub, c.Renamed) and sub.name]
     names = [str(sub.name) for sub in fields]
     unknown = set(args) - set(names)
@@ -56,19 +83,35 @@ def build(layout: c.Struct, args: Mapping[str, str]) -> bytes:
     given = [sub for sub in fields if sub.name in args]
     if given != fields[: len(given)]:
         raise CodecError(f"fields must be given in order without gaps: {names}")
+    meaning = meaning or {}
     try:
-        return b"".join(sub.build(_coerce(sub.subcon, args[str(sub.name)])) for sub in given)
+        return b"".join(
+            sub.build(
+                _encode(meaning[name], sub.subcon, args[name]) if name in meaning else _coerce(sub.subcon, args[name])
+            )
+            for sub in given
+            for name in [str(sub.name)]
+        )
+    except MeaningError as e:
+        raise CodecError(str(e)) from e
     except (c.ConstructError, ValueError) as e:
         raise CodecError(str(e)) from e
 
 
+def _encode(meaning: Meaning, subcon: c.Construct[Any, Any], text: str) -> Any:
+    """Command-line text as meant to the value a construct field expects."""
+    if isinstance(meaning, Positions):
+        raise CodecError("this field is printed by position and cannot be given on the command line")
+    if isinstance(subcon, c.GreedyRange | c.Array) and not isinstance(meaning, Flags):
+        return [meaning.encode(item) for item in text.split(",") if item]
+    return meaning.encode(text)
+
+
 def _coerce(subcon: c.Construct[Any, Any], text: str) -> Any:
-    """Command-line text to the value a construct field expects (numbers, enum names, text, hex, lists)."""
+    """Command-line text to the value a construct field expects (numbers, text, hex, lists)."""
     if subcon is c.GreedyBytes:
         return bytes.fromhex(text)
     match subcon:
-        case c.Enum():
-            return int(text, 0) if text.lstrip("-").isdigit() else text
         case c.FormatField():
             fmt: str = subcon.fmtstr  # pyright: ignore[reportUnknownMemberType]
             return float(text) if fmt[-1] in "fd" else int(text, 0)

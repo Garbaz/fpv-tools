@@ -169,4 +169,74 @@ ANCHORS: dict[str, list[Anchor]] = {
             "if (pidProfiles(i)->vbat_sag_compensation > 0 && !RPM_LIMIT_ACTIVE) { sagCompensationConfigured = true; }",
         ),
     ],
+    "MSP meanings (firmware/msp_layouts.py)": [
+        # Mode ranges: permanent box IDs, aux channel indices, and range steps of 25 us from CHANNEL_RANGE_MIN
+        (
+            "src/main/msp/msp.c",
+            "const box_t *box = findBoxByBoxId(mac->modeId); sbufWriteU8(dst, box->permanentId); "
+            "sbufWriteU8(dst, mac->auxChannelIndex); sbufWriteU8(dst, mac->range.startStep); "
+            "sbufWriteU8(dst, mac->range.endStep);",
+        ),
+        (
+            "src/main/msp/msp.c",
+            "const box_t *box = findBoxByPermanentId(i); if (box) { mac->modeId = box->boxId; "
+            "mac->auxChannelIndex = sbufReadU8(src); mac->range.startStep = sbufReadU8(src); "
+            "mac->range.endStep = sbufReadU8(src);",
+        ),
+        ("src/main/msp/msp_box.c", "sbufWriteU8(dst, box->permanentId);"),
+        ("src/main/fc/rc_modes.h", "#define MODE_STEP_TO_CHANNEL_VALUE(step) (CHANNEL_RANGE_MIN + 25 * step)"),
+        ("src/main/rx/rx.h", "#define MAX_AUX_CHANNEL_COUNT (MAX_SUPPORTED_RC_CHANNEL_COUNT - NON_AUX_CHANNEL_COUNT)"),
+        # Channels in rcData order (rc_alias_e)
+        (
+            "src/main/msp/msp.c",
+            "case MSP_RC: for (int i = 0; i < rxRuntimeState.channelCount; i++) { sbufWriteU16(dst, rcData[i]); }",
+        ),
+        # Attitude: roll and pitch in 0.1 deg, yaw converted to deg
+        (
+            "src/main/msp/msp.c",
+            "case MSP_ATTITUDE: sbufWriteU16(dst, attitude.values.roll); sbufWriteU16(dst, attitude.values.pitch); "
+            "sbufWriteU16(dst, DECIDEGREES_TO_DEGREES(attitude.values.yaw));",
+        ),
+        (
+            RAW + "src/main/flight/imu.h",
+            (
+                "// absolute angle inclination in multiple of 0.1 degree eg attitude.values.yaw 180 deg = 1800",
+                "// absolute angle inclination in multiple of 0.1 degree 180 deg = 1800",  # 4.5
+            ),
+        ),
+        ("src/main/common/maths.h", "#define DECIDEGREES_TO_DEGREES(angle) ((angle) / 10)"),
+        # Battery: legacy voltage in 0.1 V, voltage in 0.01 V, current in 0.01 A, drawn in mAh
+        (
+            RAW + "src/main/msp/msp.c",
+            "case MSP_ANALOG: sbufWriteU8(dst, (uint8_t)constrain(getLegacyBatteryVoltage(), 0, 255)); "
+            "sbufWriteU16(dst, (uint16_t)constrain(getMAhDrawn(), 0, 0xFFFF)); // milliamp hours drawn from battery "
+            "sbufWriteU16(dst, getRssi()); "
+            "sbufWriteU16(dst, (int16_t)constrain(getAmperage(), -0x8000, 0x7FFF)); // send current in 0.01 A steps, range is -320A to 320A "
+            "sbufWriteU16(dst, getBatteryVoltage()); break;",
+        ),
+        ("src/main/sensors/battery.c", "uint16_t getBatteryVoltage(void) { return voltageMeter.displayFiltered; }"),
+        (
+            "src/main/sensors/battery.c",
+            "uint16_t getLegacyBatteryVoltage(void) { return (voltageMeter.displayFiltered + 5) / 10; }",
+        ),
+        ("src/main/sensors/battery.c", "int32_t getAmperage(void) { return currentMeter.amperage; }"),
+        (RAW + "src/main/sensors/voltage.h", "uint16_t displayFiltered; // voltage in 0.01V steps"),
+        (
+            RAW + "src/main/sensors/current.h",
+            "typedef struct currentMeter_s { int32_t amperage; // current read by current sensor in centiampere (1/100th A)",
+        ),
+        # VTX: frequencies in MHz, low_power_disarm is the vtx_low_power_disarm setting
+        (RAW + "src/main/io/vtx.h", "uint16_t freq; // sets freq in MHz if band=0"),
+        ("src/main/msp/msp.c", "sbufWriteU8(dst, vtxSettingsConfig()->lowPowerDisarm);"),
+        (
+            "src/main/cli/settings.c",
+            '{ "vtx_low_power_disarm", VAR_UINT8 | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_VTX_LOW_POWER_DISARM }, PG_VTX_SETTINGS_CONFIG, offsetof(vtxSettingsConfig_t, lowPowerDisarm) },',
+        ),
+        ("src/main/cli/settings.c", "LOOKUP_TABLE_ENTRY(lookupTableVtxLowPowerDisarm),"),
+        # Dataflash summary flags (mspFlashFsFlags_e)
+        (
+            "src/main/msp/msp.c",
+            "uint8_t flags = MSP_FLASHFS_FLAG_SUPPORTED; flags |= (flashfsIsReady() ? MSP_FLASHFS_FLAG_READY : 0);",
+        ),
+    ],
 }

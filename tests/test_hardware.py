@@ -16,7 +16,7 @@ import construct as c
 import pytest
 import serial
 
-from fpv_tools.fc import dataflash
+from fpv_tools.fc import codec, dataflash
 from fpv_tools.fc.console import NO_REBOOT, End, Session
 from fpv_tools.fc.link import VCP_IDS, open_port, usb_identity
 from fpv_tools.fc.msp import MspClient, MspError
@@ -35,13 +35,17 @@ def port() -> str:
     return port
 
 
+def _refuse_armed(link: serial.Serial) -> None:
+    status = MspClient(link).request(CODES["MSP_STATUS"])
+    # The flight mode flags (offset 6) start with ARM, which is always an active box (msp_box.c)
+    if struct.unpack_from("<I", status, 6)[0] & 1:
+        pytest.exit("the flight controller is armed: not testing", returncode=1)
+
+
 @pytest.fixture
 def link(port: str) -> Iterator[serial.Serial]:
     with open_port(port, timeout=2.0) as link:
-        status = MspClient(link).request(CODES["MSP_STATUS"])
-        # The flight mode flags (offset 6) start with ARM, which is always an active box (msp_box.c)
-        if struct.unpack_from("<I", status, 6)[0] & 1:
-            pytest.exit("the flight controller is armed: not testing", returncode=1)
+        _refuse_armed(link)
         yield link
 
 
@@ -99,16 +103,47 @@ def test_dataflash_reads_as_the_fakes_assume(link: serial.Serial) -> None:
         assert (got, compression) == (address, 0) and length == len(reply) - 7 <= expected_max
 
 
-def test_cli_session_reads_to_the_end_and_leaves_without_reboot(link: serial.Serial) -> None:
+@pytest.fixture(scope="module")
+def cli_session(port: str) -> tuple[str, str]:
+    """The FC's `dump all`, and what it answered to leaving the CLI with `exit noreboot`: the one CLI session."""
+    with open_port(port, timeout=2.0) as link:
+        _refuse_armed(link)
+        session = Session(link, timeout=30.0).__enter__()
+        try:
+            dump = session.run("dump all")
+        finally:
+            closing = session.close(End.KEEP) if session.active else ""
+    return dump, closing
+
+
+def test_cli_session_reads_to_the_end_and_leaves_without_reboot(
+    link: serial.Serial, cli_session: tuple[str, str]
+) -> None:
+    dump, closing = cli_session
+    # A dump's comment lines start with the prompt's characters; it ends with `save` (cli.c printConfig)
+    assert dump.rstrip().endswith("save")
     msp_version = version_from_msp(MspClient(link).request(CODES["MSP_FC_VERSION"]))
-    session = Session(link, timeout=30.0).__enter__()
-    try:
-        # A dump's comment lines start with the prompt's characters; it ends with `save` (cli.c printConfig)
-        dump = session.run("dump all")
-        assert dump.rstrip().endswith("save")
-        assert ConfigExport.parse(dump, "flight controller").version == msp_version
-    finally:
-        closing = session.close(End.KEEP) if session.active else ""
+    assert ConfigExport.parse(dump, "flight controller").version == msp_version
     # `exit noreboot`: the FC answers it, stays on the port and is back in MSP mode
     assert closing.rstrip().endswith(NO_REBOOT)
     assert MspClient(link).request(CODES["MSP_FC_VARIANT"]) == b"BTFL"
+
+
+def test_msp_values_mean_what_the_cli_shows(
+    link: serial.Serial, fc_profile: Profile, cli_session: tuple[str, str]
+) -> None:
+    # The CLI prints mode ranges as `aux INDEX PERMANENT_ID AUX_INDEX START_US END_US LOGIC LINKED` (cli.c printAux,
+    # MODE_STEP_TO_CHANNEL_VALUE): MSP_MODE_RANGES as meant must say the same, slot by slot
+    dump, _ = cli_session
+    aux = [line.split()[2:6] for line in dump.splitlines() if line.startswith("aux ")]
+    layout = fc_profile.msp["MSP_MODE_RANGES"]
+    ranges = codec.parse(layout.reply, MspClient(link).request(CODES["MSP_MODE_RANGES"]), layout.meaning)["ranges"]
+    assert isinstance(ranges, list) and len(ranges) == len(aux)
+    for got, (permanent, index, start, end) in zip(ranges, aux, strict=True):
+        expected = {
+            "mode": fc_profile.permanent_box_ids[int(permanent)],
+            "aux_channel": f"AUX{int(index) + 1}",
+            "start": int(start),
+            "end": int(end),
+        }
+        assert got == expected

@@ -112,6 +112,7 @@ def msp(
     struct: Annotated[str | None, Parameter(name="--struct", metavar="FORMAT")] = None,
     reply: Annotated[str | None, Parameter(metavar="FORMAT")] = None,
     raw: bool = False,
+    as_hex: Annotated[bool, Parameter(name="--hex")] = False,
     every: Annotated[float | None, Parameter(metavar="SECONDS")] = None,
     changes: bool = False,
     count: Annotated[int | None, Parameter(alias="-n", metavar="N")] = None,
@@ -132,10 +133,15 @@ def msp(
     NAME=VALUE fields and reply with named fields; others take values packed by --struct, and reply in hex or as
     unpacked by --reply. Without MESSAGE, requests are read from stdin, one per line.
 
+    Known fields are what the firmware means by them: names (modes, channels, VTX device types) and units (V, A,
+    deg, us, MHz), in replies and fields given alike. A value that is not a whole number of the firmware's steps
+    is refused, never rounded. --raw shows and takes the values as sent instead.
+
         fpv-tools msp MSP_ATTITUDE --every 0.1
         fpv-tools msp MSP2_GET_TEXT type=PILOT_NAME
         fpv-tools msp MSP_MOTOR --reply H
         fpv-tools msp MSP2_SET_TEXT type=CRAFT_NAME text=Whoop --save
+        fpv-tools msp MSP_SET_MODE_RANGE index=5 mode=ANGLE aux_channel=AUX2 start=1700 end=2100 --save
 
     The FC is left as found: afterwards it reboots to undo what the messages changed in RAM (settings, and runtime
     state such as motor outputs or the clock), unless --save or --no-reboot. Messages that cannot be undone (e.g.
@@ -153,6 +159,8 @@ def msp(
     reply
         `struct` format for the reply, repeated while bytes remain (e.g. 'H' reads all u16 values).
     raw
+        Known fields as the firmware sends them: numbers, before names and units.
+    as_hex
         Print replies as hex even when the layout is known.
     every
         Repeat the request every this many seconds, until Ctrl-C or --count.
@@ -172,6 +180,8 @@ def msp(
     """
     if save and no_reboot:
         raise ValueError("--save and --no-reboot exclude each other")
+    if raw and as_hex:
+        raise ValueError("--raw and --hex exclude each other")
     lines = [message, *fields] if message is not None else None
     requests = [lines] if lines else [shlex.split(line) for line in input_lines(())]
     codes = [code_of(request[0]) for request in requests]
@@ -186,11 +196,11 @@ def msp(
         layouts = _Layouts(fc, ignore_version)
         try:
             for request, code, e in zip(requests, codes, effects, strict=True):
-                payload = _payload(layouts, request[0], request[1:], struct)
+                payload = _payload(layouts, request[0], request[1:], struct, raw)
                 if e and e.kind in (Kind.SETTINGS, Kind.RUNTIME):
                     pending.append(name_of(code))  # before sending: Ctrl-C can come during --every
                 try:
-                    _exchange(fc, layouts, code, payload, reply, raw, json, every, changes, count)
+                    _exchange(fc, layouts, code, payload, reply, raw, as_hex, json, every, changes, count)
                 except (MspTimeout, OSError):
                     if not (e and e.reboots):
                         raise
@@ -274,7 +284,7 @@ def _note(name: str) -> str:
     return e.note if e else ""
 
 
-def _payload(layouts: _Layouts, name: str, values: list[str], struct: str | None) -> bytes:
+def _payload(layouts: _Layouts, name: str, values: list[str], struct: str | None, raw: bool) -> bytes:
     from fpv_tools.fc import codec  # construct takes a while to import: not for --help
 
     if struct is not None:
@@ -290,7 +300,7 @@ def _payload(layouts: _Layouts, name: str, values: list[str], struct: str | None
     pairs = dict(v.split("=", 1) for v in values if "=" in v)
     if len(pairs) != len(values):
         raise ValueError(f"fields for {name} are NAME=VALUE with NAME one of {names}")
-    return codec.build(layout.request, pairs)
+    return codec.build(layout.request, pairs, None if raw else layout.meaning)
 
 
 def _exchange(
@@ -300,64 +310,72 @@ def _exchange(
     payload: bytes,
     reply_fmt: str | None,
     raw: bool,
+    as_hex: bool,
     json: bool,
     every: float | None,
     changes: bool,
     count: int | None,
 ) -> None:
     name = name_of(code)
+    known = name.startswith("MSP") and not as_hex and reply_fmt is None
+    layout = layouts.profile().msp.get(name) if known else None
+    units = layout.units() if layout and not raw else {}
     start, last, sent = time.monotonic(), None, 0
     while True:
         data = fc.request(code, payload)
         sent += 1
-        decoded = _decode(layouts, name, data, reply_fmt, raw)
+        decoded = _decode(layouts, name, data, reply_fmt, raw, as_hex)
         if not (changes and decoded == last):
-            _print(name, decoded, time.monotonic() - start if every else None, json)
+            _print(name, decoded, units, time.monotonic() - start if every else None, json)
         last = decoded
         if every is None or (count is not None and sent >= count):
             return
         time.sleep(max(0.0, start + sent * every - time.monotonic()))
 
 
-def _decode(layouts: _Layouts, name: str, data: bytes, reply_fmt: str | None, raw: bool) -> dict[str, Any]:
+def _decode(
+    layouts: _Layouts, name: str, data: bytes, reply_fmt: str | None, raw: bool, as_hex: bool
+) -> dict[str, Any]:
     from fpv_tools.fc import codec
 
     if reply_fmt is not None:
         return {"values": codec.unpack(reply_fmt, data)}
-    if not raw and name.startswith("MSP") and (layout := layouts.profile().msp.get(name)) is not None:
-        return codec.parse(layout.reply, data) if data else {}
+    if not as_hex and name.startswith("MSP") and (layout := layouts.profile().msp.get(name)) is not None:
+        return codec.parse(layout.reply, data, None if raw else layout.meaning) if data else {}
     return {"hex": data.hex()} if data else {}
 
 
-def _print(name: str, reply: dict[str, Any], t: float | None, json: bool) -> None:
+def _print(name: str, reply: dict[str, Any], units: dict[str, str], t: float | None, json: bool) -> None:
+    """A reply; units (by field name) follow the values, or come as their own object in JSON."""
     if json:
-        write_json({"message": name, **({"t": round(t, 4)} if t is not None else {}), "reply": reply}, line=True)
+        timing = {"t": round(t, 4)} if t is not None else {}
+        write_json({"message": name, **timing, "reply": reply, **({"units": units} if units else {})}, line=True)
         return
     prefix = f"{t:8.3f}  " if t is not None else ""
     if t is not None or len(reply) <= 1:
-        body = "  ".join(f"{k}={_text(v)}" for k, v in reply.items()) or "(empty reply)"
+        body = "  ".join(f"{k}={_text(v, units, units.get(k, ''))}" for k, v in reply.items()) or "(empty reply)"
         print(f"{prefix}{body}", flush=True)
         return
     width = max(len(k) for k in reply)
     for k, v in reply.items():
-        print(f"{k.ljust(width)}  {_text(v)}")
+        print(f"{k.ljust(width)}  {_text(v, units, units.get(k, ''), ' ')}")
     sys.stdout.flush()
 
 
-def _text(value: Any) -> str:
+def _text(value: Any, units: dict[str, str], unit: str = "", space: str = "") -> str:
+    """A value as text, with its unit after it (after a list of values, once)."""
+    after = f"{space}{unit}" if unit else ""
     match value:
         case list():
             items: list[Any] = value  # pyright: ignore[reportUnknownVariableType]
-            return (
-                " ".join(_text(v) for v in items)
-                if not any(isinstance(v, dict) for v in items)
-                else "; ".join(_text(v) for v in items)
-            )
+            if any(isinstance(v, dict) for v in items):
+                return "; ".join(_text(v, units) for v in items)
+            return " ".join(_text(v, units) for v in items) + after
         case dict():
             fields: dict[str, Any] = value  # pyright: ignore[reportUnknownVariableType]
-            return ",".join(f"{k}={_text(v)}" for k, v in fields.items())
+            return ",".join(f"{k}={_text(v, units, units.get(k, ''))}" for k, v in fields.items())
         case _:
-            return str(value)
+            return f"{value}{after}"
 
 
 __all__ = ["CommandFailed", "MspError", "cli", "msp"]

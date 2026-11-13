@@ -216,6 +216,24 @@ ADJUSTMENT_FUNCTIONS: tuple[str, ...] = (  # src/main/fc/rc_adjustments.h adjust
     "OSD_PROFILE",
     "LED_PROFILE",
 )
+RC_CHANNELS: tuple[str, ...] = (  # src/main/fc/rc_controls.h rc_alias_e
+    "ROLL",
+    "PITCH",
+    "YAW",
+    "THROTTLE",
+    "AUX1",
+    "AUX2",
+    "AUX3",
+    "AUX4",
+    "AUX5",
+    "AUX6",
+    "AUX7",
+    "AUX8",
+    "AUX9",
+    "AUX10",
+    "AUX11",
+    "AUX12",
+)
 FEATURES: dict[str, int] = {  # src/main/config/feature.h features_e, bit masks
     "RX_PPM": 1,
     "INFLIGHT_ACC_CAL": 4,
@@ -240,6 +258,70 @@ FEATURES: dict[str, int] = {  # src/main/config/feature.h features_e, bit masks
     "ESC_SENSOR": 134217728,
     "ANTI_GRAVITY": 268435456,
 }
+VTX_DEVICE_TYPES: dict[int, str] = {  # src/main/drivers/vtx_common.h vtxDevType_e
+    0: "UNSUPPORTED",
+    1: "RTC6705",
+    3: "SMARTAUDIO",
+    4: "TRAMP",
+    5: "MSP",
+    255: "UNKNOWN",
+}
+FLASHFS_FLAGS: dict[int, str] = {  # src/main/msp/msp.c mspFlashFsFlags_e
+    1: "READY",
+    2: "SUPPORTED",
+}
+VTX_LOW_POWER_DISARM: tuple[str, ...] = (  # src/main/cli/settings.c lookupTableVtxLowPowerDisarm
+    "OFF",
+    "ON",
+    "UNTIL_FIRST_ARM",
+)
+PERMANENT_BOX_IDS: dict[int, str] = {  # src/main/msp/msp_box.c boxes: boxId_e by permanentId
+    0: "ARM",
+    1: "ANGLE",
+    2: "HORIZON",
+    4: "ANTIGRAVITY",
+    5: "MAG",
+    6: "HEADFREE",
+    7: "HEADADJ",
+    8: "CAMSTAB",
+    12: "PASSTHRU",
+    13: "BEEPERON",
+    15: "LEDLOW",
+    17: "CALIB",
+    19: "OSD",
+    20: "TELEMETRY",
+    23: "SERVO1",
+    24: "SERVO2",
+    25: "SERVO3",
+    26: "BLACKBOX",
+    27: "FAILSAFE",
+    28: "AIRMODE",
+    29: "3D",
+    30: "FPVANGLEMIX",
+    31: "BLACKBOXERASE",
+    32: "CAMERA1",
+    33: "CAMERA2",
+    34: "CAMERA3",
+    35: "FLIPOVERAFTERCRASH",
+    36: "PREARM",
+    37: "BEEPGPSCOUNT",
+    39: "VTXPITMODE",
+    40: "USER1",
+    41: "USER2",
+    42: "USER3",
+    43: "USER4",
+    44: "PIDAUDIO",
+    45: "PARALYZE",
+    46: "GPSRESCUE",
+    47: "ACROTRAINER",
+    48: "VTXCONTROLDISABLE",
+    49: "LAUNCHCONTROL",
+    50: "MSPOVERRIDE",
+    51: "STICKCOMMANDDISABLE",
+    52: "BEEPERMUTE",
+    53: "READY",
+    54: "LAPTIMERRESET",
+}
 BOXID_FLIGHTMODE_LAST = 7  # src/main/fc/rc_modes.h boxId_e
 API_VERSION_MINOR = 46  # src/main/msp/msp_protocol.h
 CRSF_RSSI_MIN = -130  # src/main/rx/crsf.h
@@ -247,5 +329,8 @@ CRSF_RSSI_MAX = 0  # src/main/rx/crsf.h
 RSSI_MAX_VALUE = 1023  # src/main/rx/rx.h
 SLOW_VOLTAGE_TASK_FREQ_HZ = 50  # src/main/sensors/voltage.h
 FAST_VOLTAGE_TASK_FREQ_HZ = 200  # src/main/sensors/voltage.h
+CHANNEL_RANGE_MIN = 900  # src/main/fc/rc_modes.h
+MAX_SUPPORTED_RC_CHANNEL_COUNT = 18  # src/main/rx/rx.h
+NON_AUX_CHANNEL_COUNT = 4  # src/main/rx/rx.h
 ALIASES: dict[str, tuple[str, ...]] = {  # current name -> names older builds of the line used
 }

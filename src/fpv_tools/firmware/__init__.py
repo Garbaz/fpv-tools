@@ -4,7 +4,7 @@ A profile combines, for one Betaflight release line (4.5, 2025.12, 2026.6):
   - name tables generated from that line's maintenance branch (tables/, scripts/gen_firmware_tables.py), which also
     checks the firmware statements fpv-tools' own logic reproduces (scripts/firmware_anchors.py) and refuses to
     write a line where any of them fails;
-  - MSP payload layouts (msp_layouts.py), compared by hand across the lines.
+  - MSP payload layouts and what their values mean (msp_layouts.py), compared by hand across the lines.
 
 Logs and FCs are matched to a line by their firmware version. Patch releases share their line's profile; pre-release
 builds (alpha, RC) map to their line with a warning, because their tables can differ from the release (2026.6.0-alpha
@@ -74,12 +74,19 @@ class Profile:
     rssi_max: int
     voltage_task_hz: tuple[int, int]  # (slow, fast with sag compensation configured)
     blackbox_high_resolution_scale: float  # blackbox.c, anchored
+    rc_channels: tuple[str, ...]  # by rcData index
+    aux_channels: tuple[str, ...]  # by aux channel index (mode and VTX ranges)
+    permanent_box_ids: dict[int, str]  # box (as in box_ids) by the permanent ID MSP numbers modes with
+    vtx_device_types: dict[int, str]
+    vtx_low_power_disarm: tuple[str, ...]  # the vtx_low_power_disarm setting's names, by value
+    flashfs_flags: dict[int, str]  # MSP_DATAFLASH_SUMMARY flag bits
+    channel_range_min: int  # us at mode range step 0; steps are 25 us (MODE_STEP_TO_CHANNEL_VALUE, anchored)
 
     @cached_property
     def msp(self) -> dict[str, MspLayout]:
         from fpv_tools.firmware import msp_layouts  # construct takes a while to import: only when MSP needs it
 
-        return msp_layouts.layouts(self.line)
+        return msp_layouts.layouts(self)
 
     @property
     def name(self) -> str:
@@ -88,6 +95,11 @@ class Profile:
 
 def _profile(line: tuple[int, int]) -> Profile:
     t = TABLES[line]
+    # rc_alias_e names the channels up to AUX12; the firmware supports MAX_SUPPORTED_RC_CHANNEL_COUNT, numbering
+    # the rest on in the same way (aux channel n is rcData[NON_AUX_CHANNEL_COUNT + n - 1], rx.h, anchored)
+    channels = t.RC_CHANNELS + tuple(
+        f"AUX{i - t.NON_AUX_CHANNEL_COUNT + 1}" for i in range(len(t.RC_CHANNELS), t.MAX_SUPPORTED_RC_CHANNEL_COUNT)
+    )
     return Profile(
         line=line,
         box_ids=t.BOX_IDS,
@@ -104,6 +116,13 @@ def _profile(line: tuple[int, int]) -> Profile:
         rssi_max=t.RSSI_MAX_VALUE,
         voltage_task_hz=(t.SLOW_VOLTAGE_TASK_FREQ_HZ, t.FAST_VOLTAGE_TASK_FREQ_HZ),
         blackbox_high_resolution_scale=10.0,
+        rc_channels=channels,
+        aux_channels=channels[t.NON_AUX_CHANNEL_COUNT :],
+        permanent_box_ids=t.PERMANENT_BOX_IDS,
+        vtx_device_types=t.VTX_DEVICE_TYPES,
+        vtx_low_power_disarm=t.VTX_LOW_POWER_DISARM,
+        flashfs_flags=t.FLASHFS_FLAGS,
+        channel_range_min=t.CHANNEL_RANGE_MIN,
     )
 
 

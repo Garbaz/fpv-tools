@@ -9,7 +9,8 @@ What this produces, and what it assumes (see also the firmware package docstring
 
 - Each release line is read from the newest commit that belongs to it: its maintenance branch head (the largest
   enum any firmware of that line can have). A different ref can be given per line.
-- It extracts *names by value* of a few enums and the values of a few #defines, parsed with tree-sitter's C grammar.
+- It extracts *names by value* of a few enums, the values of a few #defines, a few string tables (CLI setting
+  names) and msp_box.c's table of permanent box IDs, parsed with tree-sitter's C grammar.
   What those values mean in logs and over MSP rests on firmware statements listed in scripts/firmware_anchors.py;
   every one must be present exactly once (comments ignored) or the line is not generated.
 - It refuses anything it cannot read exactly: a missing enum or #define, preprocessor conditionals inside an enum
@@ -71,8 +72,29 @@ ENUMS = {
     "ADJUSTMENT_FUNCTIONS": EnumSpec(
         "src/main/fc/rc_adjustments.h", "adjustmentFunction_e", "ADJUSTMENT_", "ADJUSTMENT_FUNCTION_COUNT"
     ),
+    # RC channels by index (rcData); aux channel n is index NON_AUX_CHANNEL_COUNT + n
+    "RC_CHANNELS": EnumSpec("src/main/fc/rc_controls.h", "rc_alias_e", "", None),
 }
 FEATURES = EnumSpec("src/main/config/feature.h", "features_e", "FEATURE_", None)  # bit masks, not indices
+# Enums whose values are not 0..n-1: names by value
+VALUE_ENUMS = {
+    "VTX_DEVICE_TYPES": EnumSpec("src/main/drivers/vtx_common.h", "vtxDevType_e", "VTXDEV_", None),
+    "FLASHFS_FLAGS": EnumSpec("src/main/msp/msp.c", "mspFlashFsFlags_e", "MSP_FLASHFS_FLAG_", None),  # bits
+}
+
+
+@dataclass(frozen=True)
+class ArraySpec:
+    path: str
+    name: str  # a static array with an initializer list
+
+
+# The names CLI settings take (cli/settings.c lookup tables), indexed by the setting's value
+LOOKUP_TABLES = {
+    "VTX_LOW_POWER_DISARM": ArraySpec("src/main/cli/settings.c", "lookupTableVtxLowPowerDisarm"),
+}
+# Modes over MSP are numbered by permanent ID, which is not the boxId_e index
+BOX_TABLE = ArraySpec("src/main/msp/msp_box.c", "boxes")
 DEFINES = {
     "API_VERSION_MINOR": DefineSpec("src/main/msp/msp_protocol.h", "API_VERSION_MINOR"),
     "CRSF_RSSI_MIN": DefineSpec("src/main/rx/crsf.h", "CRSF_RSSI_MIN"),
@@ -80,6 +102,9 @@ DEFINES = {
     "RSSI_MAX_VALUE": DefineSpec("src/main/rx/rx.h", "RSSI_MAX_VALUE"),
     "SLOW_VOLTAGE_TASK_FREQ_HZ": DefineSpec("src/main/sensors/voltage.h", "SLOW_VOLTAGE_TASK_FREQ_HZ"),
     "FAST_VOLTAGE_TASK_FREQ_HZ": DefineSpec("src/main/sensors/voltage.h", "FAST_VOLTAGE_TASK_FREQ_HZ"),
+    "CHANNEL_RANGE_MIN": DefineSpec("src/main/fc/rc_modes.h", "CHANNEL_RANGE_MIN"),
+    "MAX_SUPPORTED_RC_CHANNEL_COUNT": DefineSpec("src/main/rx/rx.h", "MAX_SUPPORTED_RC_CHANNEL_COUNT"),
+    "NON_AUX_CHANNEL_COUNT": DefineSpec("src/main/rx/rx.h", "NON_AUX_CHANNEL_COUNT"),
 }
 
 
@@ -171,6 +196,68 @@ def index_table(repo: Path, ref: str, spec: EnumSpec) -> tuple[list[str], int | 
         raise GenerationError(f"{ref}: {spec.typedef} values are not 0..n-1")
     flight_mode_last = next((v for n, v, _ in entries if n == "BOXID_FLIGHTMODE_LAST"), None)
     return [name.removeprefix(spec.prefix) for name, _ in real], flight_mode_last
+
+
+def value_table(repo: Path, ref: str, spec: EnumSpec) -> dict[int, str]:
+    """Names by value of an enum whose values need not be 0..n-1 (aliases left out); values must be unique."""
+    out: dict[int, str] = {}
+    for name, value, alias in enumerators(repo, ref, spec):
+        if alias:
+            continue
+        if value in out:
+            raise GenerationError(f"{ref}: {spec.typedef} has two names for {value}")
+        out[value] = name.removeprefix(spec.prefix)
+    return out
+
+
+def initializer(repo: Path, ref: str, spec: ArraySpec) -> Node:
+    """The initializer list of a static array, refusing preprocessor conditionals inside it (entries would depend
+    on the build)."""
+    tree = PARSER.parse(source(repo, ref, spec.path))
+    for node in walk(tree.root_node):
+        if node.type != "init_declarator":
+            continue
+        declarator = node.child_by_field_name("declarator")
+        names = [text(n) for n in walk(declarator) if n.type == "identifier"] if declarator else []
+        value = node.child_by_field_name("value")
+        if names[:1] == [spec.name] and value is not None and value.type == "initializer_list":
+            if any(n.type.startswith("preproc") for n in walk(value)):
+                raise GenerationError(f"{ref}: {spec.name} has a preprocessor conditional; entries depend on the build")
+            return value
+    raise GenerationError(f"{ref}: array {spec.name} not found in {spec.path}")
+
+
+def entries(node: Node) -> list[Node]:
+    """The entries of an initializer list, without comments."""
+    return [child for child in node.named_children if child.type != "comment"]
+
+
+def string_array(repo: Path, ref: str, spec: ArraySpec) -> list[str]:
+    items = entries(initializer(repo, ref, spec))
+    if any(item.type != "string_literal" for item in items):
+        raise GenerationError(f"{ref}: {spec.name} is not a plain list of strings")
+    return [text(item)[1:-1] for item in items]
+
+
+def box_table(repo: Path, ref: str, spec: ArraySpec, box_ids: list[str]) -> dict[int, str]:
+    """boxId_e name (as in BOX_IDS) by permanent ID, from msp_box.c's { .boxId, .boxName, .permanentId } entries."""
+    out: dict[int, str] = {}
+    for entry in entries(initializer(repo, ref, spec)):
+        fields: dict[str, Node] = {}
+        for pair in entries(entry):
+            designator = pair.child_by_field_name("designator")
+            value = pair.child_by_field_name("value")
+            if pair.type != "initializer_pair" or designator is None or value is None:
+                raise GenerationError(f"{ref}: {spec.name} entry is not designated: {text(entry)}")
+            fields[text(designator).lstrip(".")] = value
+        box = text(fields.get("boxId")).removeprefix("BOX")
+        if box not in box_ids or "permanentId" not in fields:
+            raise GenerationError(f"{ref}: {spec.name} entry with unknown box or no permanent ID: {text(entry)}")
+        permanent = evaluate(fields["permanentId"], {})
+        if permanent in out:
+            raise GenerationError(f"{ref}: permanent ID {permanent} used twice in {spec.name}")
+        out[permanent] = box
+    return dict(sorted(out.items()))
 
 
 def define(repo: Path, ref: str, spec: DefineSpec) -> int:
@@ -275,8 +362,10 @@ def generate(repo: Path, line: str, ref: str, path: Path, allow: Allow, label: s
         "",
     ]
     flight_mode_last = None
+    box_ids: list[str] = []
     for name, spec in ENUMS.items():
         names, last = index_table(repo, ref, spec)
+        box_ids = names if name == "BOX_IDS" else box_ids
         flight_mode_last = last if last is not None else flight_mode_last
         old = previous.get(name)
         if isinstance(old, tuple):
@@ -287,6 +376,16 @@ def generate(repo: Path, line: str, ref: str, path: Path, allow: Allow, label: s
     features = {n.removeprefix(FEATURES.prefix): v for n, v, alias in enumerators(repo, ref, FEATURES) if not alias}
     body = "".join(f'    "{n}": {v},\n' for n, v in features.items())
     out.append(f"FEATURES: dict[str, int] = {{  # {FEATURES.path} {FEATURES.typedef}, bit masks\n{body}}}")
+    for name, spec in VALUE_ENUMS.items():
+        body = "".join(f'    {v}: "{n}",\n' for v, n in value_table(repo, ref, spec).items())
+        out.append(f"{name}: dict[int, str] = {{  # {spec.path} {spec.typedef}\n{body}}}")
+    for name, array in LOOKUP_TABLES.items():
+        body = "".join(f'    "{n}",\n' for n in string_array(repo, ref, array))
+        out.append(f"{name}: tuple[str, ...] = (  # {array.path} {array.name}\n{body})")
+    body = "".join(f'    {v}: "{n}",\n' for v, n in box_table(repo, ref, BOX_TABLE, box_ids).items())
+    out.append(
+        f"PERMANENT_BOX_IDS: dict[int, str] = {{  # {BOX_TABLE.path} {BOX_TABLE.name}: boxId_e by permanentId\n{body}}}"
+    )
     if flight_mode_last is None:
         raise GenerationError(f"{ref}: BOXID_FLIGHTMODE_LAST not found")
     out.append(f"BOXID_FLIGHTMODE_LAST = {flight_mode_last}  # src/main/fc/rc_modes.h boxId_e")

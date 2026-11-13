@@ -5,6 +5,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `fpv-tools msp` shows and takes known fields as the firmware means them. Modes, RC and aux channels, VTX device
+  types, `vtx_low_power_disarm` and dataflash flags appear as names. Voltage, current, attitude, mode ranges (us)
+  and VTX frequencies appear in units. Input that isn't a whole number of the firmware's steps is refused, not
+  rounded. JSON replies list the units.
+- A layout for `MSP_SET_MODE_RANGE`, e.g. `mode=ANGLE aux_channel=AUX2 start=1700 end=2100`.
+
+### Changed
+
+- `fpv-tools msp --raw` now shows and takes known fields as sent (numbers). Hex output is now `--hex`.
+- MSP field names follow their meaning: `MSP_MODE_RANGES` has `mode`, `start` and `end` (were `permanent_id`,
+  `start_step` and `end_step`), and `MSP_BOXIDS` has `modes` (was `permanent_ids`). `MSP_RC` channels are
+  named (`ROLL=1500,...`).
+
 ## [0.2.3] - 2026-11-12
 
 - Adjusted examples
