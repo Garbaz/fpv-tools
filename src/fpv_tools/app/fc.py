@@ -5,7 +5,8 @@ import shlex
 import sys
 import time
 import warnings
-from typing import Annotated, Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Annotated, Any
 
 from cyclopts import Parameter
 
@@ -17,6 +18,9 @@ from fpv_tools.fc.msp_codes import CODES, NAMES
 from fpv_tools.firmware import Profile, profile, supported, version_from_msp
 from fpv_tools.firmware.msp_effects import Effect, Kind, effect
 from fpv_tools.output import write_json
+
+if TYPE_CHECKING:
+    from fpv_tools.firmware.layout import Unit
 
 
 class CommandFailed(Exception):
@@ -133,15 +137,16 @@ def msp(
     NAME=VALUE fields and reply with named fields; others take values packed by --struct, and reply in hex or as
     unpacked by --reply. Without MESSAGE, requests are read from stdin, one per line.
 
-    Known fields are what the firmware means by them: names (modes, channels, VTX device types) and units (V, A,
-    deg, us, MHz), in replies and fields given alike. A value that is not a whole number of the firmware's steps
-    is refused, never rounded. --raw shows and takes the values as sent instead.
+    Known fields are what the firmware means by them: names (modes, channels, VTX device types) and quantities
+    with their unit (16.12V, 1700us, 5733MHz), printed and given alike, so what is printed can be given back. A
+    quantity takes any SI prefix (1.7ms), but needs a unit; a value between the firmware's steps or outside its
+    range is refused, never rounded. --raw prints and takes the values as sent: numbers, without units or names.
 
         fpv-tools msp MSP_ATTITUDE --every 0.1
         fpv-tools msp MSP2_GET_TEXT type=PILOT_NAME
         fpv-tools msp MSP_MOTOR --reply H
         fpv-tools msp MSP2_SET_TEXT type=CRAFT_NAME text=Whoop --save
-        fpv-tools msp MSP_SET_MODE_RANGE index=5 mode=ANGLE aux_channel=AUX2 start=1700 end=2100 --save
+        fpv-tools msp MSP_SET_MODE_RANGE index=5 mode=ANGLE aux_channel=AUX2 start=1700us end=2100us --save
 
     The FC is left as found: afterwards it reboots to undo what the messages changed in RAM (settings, and runtime
     state such as motor outputs or the clock), unless --save or --no-reboot. Messages that cannot be undone (e.g.
@@ -159,7 +164,7 @@ def msp(
     reply
         `struct` format for the reply, repeated while bytes remain (e.g. 'H' reads all u16 values).
     raw
-        Known fields as the firmware sends them: numbers, before names and units.
+        Known fields as the firmware sends them, printed and given: numbers, without units or names.
     as_hex
         Print replies as hex even when the layout is known.
     every
@@ -300,7 +305,12 @@ def _payload(layouts: _Layouts, name: str, values: list[str], struct: str | None
     pairs = dict(v.split("=", 1) for v in values if "=" in v)
     if len(pairs) != len(values):
         raise ValueError(f"fields for {name} are NAME=VALUE with NAME one of {names}")
-    return codec.build(layout.request, pairs, None if raw else layout.meaning)
+    try:
+        return codec.build(layout.request, pairs, None if raw else layout.meaning)
+    except codec.CodecError as e:
+        if raw:
+            raise codec.CodecError(f"{e} (--raw takes the values as sent: numbers, without units or names)") from e
+        raise
 
 
 def _exchange(
@@ -345,37 +355,57 @@ def _decode(
     return {"hex": data.hex()} if data else {}
 
 
-def _print(name: str, reply: dict[str, Any], units: dict[str, str], t: float | None, json: bool) -> None:
-    """A reply; units (by field name) follow the values, or come as their own object in JSON."""
+def _print(name: str, reply: dict[str, Any], units: "Mapping[str, Unit]", t: float | None, json: bool) -> None:
+    """A reply as fields, each value in the form fields are given in: with its unit (1700us), lists
+    comma-separated, records as NAME=VALUE ... one per line. With --every, one line per reply. JSON has the values
+    as numbers and the units by field name."""
     if json:
         timing = {"t": round(t, 4)} if t is not None else {}
-        write_json({"message": name, **timing, "reply": reply, **({"units": units} if units else {})}, line=True)
+        symbols = {k: u.symbol for k, u in units.items()}
+        write_json({"message": name, **timing, "reply": reply, **({"units": symbols} if symbols else {})}, line=True)
         return
-    prefix = f"{t:8.3f}  " if t is not None else ""
-    if t is not None or len(reply) <= 1:
-        body = "  ".join(f"{k}={_text(v, units, units.get(k, ''))}" for k, v in reply.items()) or "(empty reply)"
-        print(f"{prefix}{body}", flush=True)
+    if t is not None:
+        body = "  ".join(_inline(k, v, units) for k, v in reply.items()) or "(empty reply)"
+        print(f"{t:8.3f}  {body}", flush=True)
+        return
+    if not reply:
+        print("(empty reply)", flush=True)
         return
     width = max(len(k) for k in reply)
     for k, v in reply.items():
-        print(f"{k.ljust(width)}  {_text(v, units, units.get(k, ''), ' ')}")
+        lines = _lines(v, units, units.get(k)) or [""]
+        print(f"{k.ljust(width)}  {lines[0]}")
+        for line in lines[1:]:
+            print(f"{'':{width}}  {line}")
     sys.stdout.flush()
 
 
-def _text(value: Any, units: dict[str, str], unit: str = "", space: str = "") -> str:
-    """A value as text, with its unit after it (after a list of values, once)."""
-    after = f"{space}{unit}" if unit else ""
+def _inline(name: str, value: Any, units: "Mapping[str, Unit]") -> str:
+    match value:
+        case dict():  # named positions: their names are the fields
+            return _text(value, units, units.get(name))
+        case _:
+            return f"{name}={'; '.join(_lines(value, units, units.get(name)))}"
+
+
+def _lines(value: Any, units: "Mapping[str, Unit]", unit: "Unit | None") -> list[str]:
+    """A value as text; records (a list of structs) one per line."""
+    if isinstance(value, list) and any(isinstance(v, dict) for v in value):  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        records: list[Any] = value  # pyright: ignore[reportUnknownVariableType]
+        return [_text(record, units, unit) for record in records]
+    return [_text(value, units, unit)]
+
+
+def _text(value: Any, units: "Mapping[str, Unit]", unit: "Unit | None") -> str:
     match value:
         case list():
             items: list[Any] = value  # pyright: ignore[reportUnknownVariableType]
-            if any(isinstance(v, dict) for v in items):
-                return "; ".join(_text(v, units) for v in items)
-            return " ".join(_text(v, units) for v in items) + after
-        case dict():
+            return ",".join(_text(v, units, unit) for v in items)
+        case dict():  # a struct, or named positions in `unit`
             fields: dict[str, Any] = value  # pyright: ignore[reportUnknownVariableType]
-            return ",".join(f"{k}={_text(v, units, units.get(k, ''))}" for k, v in fields.items())
+            return " ".join(f"{k}={_text(v, units, units.get(k, unit))}" for k, v in fields.items())
         case _:
-            return f"{value}{after}"
+            return unit.format(value) if unit is not None else str(value)
 
 
 __all__ = ["CommandFailed", "MspError", "cli", "msp"]

@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import contextlib
 import io
+import re
 import struct
 import sys
-from typing import Any
+from collections.abc import Iterator
+from typing import Any, cast
 
 import construct as c
 import pytest
@@ -13,7 +17,7 @@ from fpv_tools.fc import codec, dataflash
 from fpv_tools.fc.msp import MspClient, MspError, crc8_dvb_s2, encode_frame
 from fpv_tools.fc.msp_codes import CODES, INBOUND, NAMES
 from fpv_tools.firmware import PROFILES
-from fpv_tools.firmware.layout import Names
+from fpv_tools.firmware.layout import Linear, Names, Positions
 from fpv_tools.firmware.msp_effects import EFFECTS
 
 
@@ -146,14 +150,81 @@ def test_values_are_what_the_firmware_means() -> None:
     }
     # Setting it takes the same values (msp.c MSP_SET_MODE_RANGE reads index, permanent ID, aux index, steps)
     set_range = profile.msp["MSP_SET_MODE_RANGE"]
-    fields = {"index": "3", "mode": "BEEPERON", "aux_channel": "AUX4", "start": "1700", "end": "2100"}
+    fields = {"index": "3", "mode": "BEEPERON", "aux_channel": "AUX4", "start": "1700us", "end": "2100us"}
     assert codec.build(set_range.request, fields, set_range.meaning) == bytes([3, 13, 3, 32, 48])
-    # Design: input that is not exact is refused, never rounded; and a number that has a name is refused, as it
-    # could be meant in another numbering (AUX4 is index 3)
-    with pytest.raises(codec.CodecError, match="steps of 25 us"):
-        codec.build(set_range.request, fields | {"start": "1710"}, set_range.meaning)
-    with pytest.raises(codec.CodecError, match="AUX4"):
-        codec.build(set_range.request, fields | {"aux_channel": "3"}, set_range.meaning)
+    assert codec.build(set_range.request, fields | {"start": "1.7ms", "end": "2100 µs"}, set_range.meaning) == (
+        bytes([3, 13, 3, 32, 48])
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "text", "error"),
+    [
+        # Design: a quantity needs its unit, so a value meant as sent (a step) cannot pass for one
+        ("start", "32", "needs its unit"),
+        ("start", "1700V", "not a unit of time"),
+        # Design: refused, never rounded: between steps, or outside MIN/MAX_MODE_RANGE_STEP (rc_modes.h)
+        ("start", "1710us", "steps of 25us from 900us"),
+        ("end", "2125us", "outside 900us..2100us"),
+        ("start", "875us", "outside 900us..2100us"),
+        ("start", "inf", "not a quantity"),
+        # Design: a number that has a name could be meant in another numbering (AUX4 is index 3)
+        ("aux_channel", "3", "AUX4"),
+        ("mode", "FOO", "none of ARM"),
+        ("index", "256", "outside 0..255"),
+    ],
+)
+def test_input_without_an_exact_meaning_is_refused(field: str, text: str, error: str) -> None:
+    set_range = PROFILES[2026, 6].msp["MSP_SET_MODE_RANGE"]
+    fields = {"index": "3", "mode": "BEEPERON", "aux_channel": "AUX4", "start": "1700us", "end": "2100us"}
+    with pytest.raises(codec.CodecError, match=f"{field}={re.escape(text)}: .*{re.escape(error)}"):
+        codec.build(set_range.request, fields | {field: text}, set_range.meaning)
+
+
+def test_raw_input_is_numbers_as_sent() -> None:
+    set_range = PROFILES[2026, 6].msp["MSP_SET_MODE_RANGE"]
+    fields = {"index": "3", "mode": "13", "aux_channel": "3", "start": "32", "end": "48"}
+    assert codec.build(set_range.request, fields) == bytes([3, 13, 3, 32, 48])
+    with pytest.raises(codec.CodecError, match="not a number"):
+        codec.build(set_range.request, fields | {"start": "1700us"})
+
+
+def _fields(struct_: c.Construct[Any, Any]) -> Iterator[tuple[str, c.Construct[Any, Any]]]:
+    """(name, field) of a struct at any depth; a list field as its element."""
+    subcons: list[Any] = getattr(struct_, "subcons", [])
+    for sub in subcons:
+        inner: Any = cast("Any", sub.subcon) if isinstance(sub, c.Renamed) else sub  # pyright: ignore[reportUnknownMemberType]
+        while isinstance(inner, c.GreedyRange | c.Array):
+            inner = cast("Any", inner.subcon)  # pyright: ignore[reportUnknownMemberType]
+        if isinstance(inner, c.Struct):
+            yield from _fields(inner)
+        elif sub.name:
+            yield str(sub.name), inner
+
+
+@pytest.mark.parametrize("line", sorted(PROFILES))
+def test_what_is_printed_is_given_back(line: tuple[int, int]) -> None:
+    # Design: every wire value a known field can hold is printed in a form that is accepted as input and means the
+    # same wire value again (Positions are output only)
+    for name, layout in PROFILES[line].msp.items():
+        for field, sub in [*_fields(layout.request), *_fields(layout.reply)]:
+            meaning = layout.meaning.get(field)
+            if meaning is None or isinstance(meaning, Positions):
+                continue
+            low, high = codec._bounds(sub) or (0, 0)  # pyright: ignore[reportPrivateUsage]
+            if isinstance(meaning, Linear) and meaning.wire_range:
+                low, high = max(low, meaning.wire_range[0]), min(high, meaning.wire_range[1])
+            wires = range(low, high + 1) if high - low < 4096 else [low, low + 1, 0, 1, 12345, high - 1, high]
+            for wire in wires:
+                decoded = meaning.decode(wire)
+                printed = (
+                    meaning.unit.format(decoded)
+                    if isinstance(meaning, Linear)
+                    else ",".join(map(str, decoded))
+                    if isinstance(decoded, list)
+                    else str(decoded)
+                )
+                assert meaning.encode(printed) == wire, (name, field, wire, printed)
 
 
 def test_rc_channels_are_named_in_firmware_order() -> None:
@@ -180,7 +251,7 @@ def test_layouts_on_real_replies() -> None:
     layout = PROFILES[2026, 6].msp["MSP_VTX_CONFIG"]
     reply = codec.parse(layout.reply, vtx, layout.meaning)
     assert reply["frequency"] == 5733 and reply["low_power_disarm"] == "OFF" and reply["vtxtable_power_levels"] == 5
-    assert layout.units()["frequency"] == "MHz"
+    assert layout.units()["frequency"].symbol == "MHz"
     # Custom OSD messages exist from 2025.12; 4.5 knows only text types 1..6
     text_2026, text_4_5 = PROFILES[2026, 6].msp["MSP2_SET_TEXT"], PROFILES[4, 5].msp["MSP2_SET_TEXT"]
     assert codec.build(text_2026.request, {"type": "CUSTOM_MSG_0", "text": "HI"}, text_2026.meaning) == b"\x07\x02HI"
@@ -201,6 +272,27 @@ def test_replies_as_meant_as_sent_or_as_bytes(
         _run(monkeypatch, "MSP_ANALOG", fake=FakeMsp(fc), **options)
         return [" ".join(line.split()) for line in capsys.readouterr().out.splitlines()]
 
-    assert lines() == ["vbat_legacy 16.1 V", "mah_drawn 250 mAh", "rssi 1023", "amperage 3.42 A", "vbat 16.12 V"]
+    assert lines() == ["vbat_legacy 16.1V", "mah_drawn 250mAh", "rssi 1023", "amperage 3.42A", "vbat 16.12V"]
     assert lines(raw=True) == ["vbat_legacy 161", "mah_drawn 250", "rssi 1023", "amperage 342", "vbat 1612"]
-    assert lines(as_hex=True) == [f"hex={analog.hex()}"]
+    assert lines(as_hex=True) == [f"hex {analog.hex()}"]
+
+
+def test_printed_mode_ranges_set_the_same_range(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Design: a record as printed is the fields that set it. msp.c: MSP_MODE_RANGES sends permanent ID, aux index
+    # and steps per range; MSP_SET_MODE_RANGE reads index, then the same.
+    ranges = bytes([0, 0, 32, 48, 13, 3, 16, 32])  # ARM on AUX1 1700..2100us, BEEPERON on AUX4 1300..1700us
+
+    def fc(code: int, payload: bytes) -> bytes:
+        return ranges if code == CODES["MSP_MODE_RANGES"] else _fc_2026_6(code, payload)
+
+    _run(monkeypatch, "MSP_MODE_RANGES", fake=FakeMsp(fc))
+    printed = capsys.readouterr().out.splitlines()
+    assert printed == [
+        "ranges  mode=ARM aux_channel=AUX1 start=1700us end=2100us",
+        "        mode=BEEPERON aux_channel=AUX4 start=1300us end=1700us",
+    ]
+    fake = FakeMsp(_fc_2026_6)
+    _run(monkeypatch, "MSP_SET_MODE_RANGE", "index=1", *printed[1].split(), fake=fake, no_reboot=True)
+    assert (CODES["MSP_SET_MODE_RANGE"], bytes([1, 13, 3, 16, 32])) in fake.requests

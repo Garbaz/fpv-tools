@@ -8,10 +8,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `fpv-tools msp` shows and takes known fields as the firmware means them. Modes, RC and aux channels, VTX device
-  types, `vtx_low_power_disarm` and dataflash flags appear as names. Voltage, current, attitude, mode ranges (us)
-  and VTX frequencies appear in units. Input that isn't a whole number of the firmware's steps is refused, not
-  rounded. JSON replies list the units.
-- A layout for `MSP_SET_MODE_RANGE`, e.g. `mode=ANGLE aux_channel=AUX2 start=1700 end=2100`.
+  types, `vtx_low_power_disarm` and dataflash flags appear as names. Quantities appear with their unit, each field
+  in one fixed unit: voltage and current (`16.12V`, `3.42A`), charge, attitude, mode ranges and channel values
+  (`1700us`), VTX frequencies (`5733MHz`) and flash sizes (`B`). Output can be given back as input: lists are
+  comma-separated, and records print one per line as `NAME=VALUE` fields. JSON replies list the units.
+- Quantities given as input need their unit and take any SI prefix (`1.7ms` is `1700us`). A bare number, a value
+  between the firmware's steps, or one outside its range (mode ranges 900us..2100us) is refused, never rounded.
+- A layout for `MSP_SET_MODE_RANGE`, e.g. `mode=ANGLE aux_channel=AUX2 start=1700us end=2100us`.
 
 ### Changed
 

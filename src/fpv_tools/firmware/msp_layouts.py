@@ -10,7 +10,22 @@ from typing import TYPE_CHECKING
 
 import construct as c
 
-from fpv_tools.firmware.layout import Flags, Meaning, MspLayout, Names, Positions, indexed, scaled
+from fpv_tools.firmware.layout import (
+    AMPERE,
+    BYTE,
+    DEGREE,
+    MAH,
+    MHZ,
+    US,
+    VOLT,
+    Flags,
+    Meaning,
+    MspLayout,
+    Names,
+    Positions,
+    indexed,
+    scaled,
+)
 
 if TYPE_CHECKING:
     from fpv_tools.firmware import Profile
@@ -53,13 +68,12 @@ def layouts(profile: Profile) -> dict[str, MspLayout]:
 def _base(profile: Profile) -> dict[str, MspLayout]:
     text_type = {"type": Names({v: k for k, v in TEXT_TYPES[profile.line].items()})}
     box = Names(profile.permanent_box_ids)  # modes over MSP are numbered by permanent ID (msp_box.c)
-    # Mode ranges: auxChannelIndex, and steps of 25 us from CHANNEL_RANGE_MIN (MODE_STEP_TO_CHANNEL_VALUE)
-    ranges: dict[str, Meaning] = {
-        "aux_channel": indexed(profile.aux_channels),
-        "start": scaled("25", "us", profile.channel_range_min),
-        "end": scaled("25", "us", profile.channel_range_min),
-    }
-    mhz = scaled("1", "MHz")  # vtx.h: freq in MHz
+    # Mode ranges: auxChannelIndex, and steps of 25 us from CHANNEL_RANGE_MIN (MODE_STEP_TO_CHANNEL_VALUE) up to
+    # MAX_MODE_RANGE_STEP. Channel values are pulse widths in us (rx.h PWM_PULSE_MIN, rcData)
+    low, high = profile.channel_range
+    step = scaled("25", US, low, (0, (high - low) // 25))
+    ranges: dict[str, Meaning] = {"aux_channel": indexed(profile.aux_channels), "start": step, "end": step}
+    mhz = scaled("1", MHZ)  # vtx.h: freq in MHz
     return {
         "MSP_API_VERSION": MspLayout(reply=c.Struct("protocol" / u8, "api_major" / u8, "api_minor" / u8)),  # 654
         "MSP_FC_VARIANT": MspLayout(reply=c.Struct("variant" / text(4))),  # 660
@@ -82,19 +96,19 @@ def _base(profile: Profile) -> dict[str, MspLayout]:
         "MSP_ANALOG": MspLayout(  # 786
             reply=c.Struct("vbat_legacy" / u8, "mah_drawn" / u16, "rssi" / u16, "amperage" / i16, "vbat" / u16),
             meaning={
-                "vbat_legacy": scaled("0.1", "V"),
-                "mah_drawn": scaled("1", "mAh"),
-                "amperage": scaled("0.01", "A"),
-                "vbat": scaled("0.01", "V"),
+                "vbat_legacy": scaled("0.1", VOLT),
+                "mah_drawn": scaled("1", MAH),
+                "amperage": scaled("0.01", AMPERE),
+                "vbat": scaled("0.01", VOLT),
             },
         ),
         "MSP_ATTITUDE": MspLayout(  # 1364
             reply=c.Struct("roll" / i16, "pitch" / i16, "yaw" / i16),
-            meaning={"roll": scaled("0.1", "deg"), "pitch": scaled("0.1", "deg"), "yaw": scaled("1", "deg")},
+            meaning={"roll": scaled("0.1", DEGREE), "pitch": scaled("0.1", DEGREE), "yaw": scaled("1", DEGREE)},
         ),
         "MSP_RC": MspLayout(  # 1358: rcData, in rc_alias_e order
             reply=c.Struct("channels" / c.GreedyRange(u16)),
-            meaning={"channels": Positions(profile.rc_channels)},
+            meaning={"channels": Positions(profile.rc_channels, US)},
         ),
         "MSP_DEBUG": MspLayout(reply=c.Struct("debug" / c.GreedyRange(i16))),  # 794: int16_t debug[8]
         "MSP_MODE_RANGES": MspLayout(  # 1465
@@ -150,7 +164,11 @@ def _base(profile: Profile) -> dict[str, MspLayout]:
         ),
         "MSP_DATAFLASH_SUMMARY": MspLayout(  # 520
             reply=c.Struct("flags" / u8, "sectors" / u32, "total_size" / u32, "used_size" / u32),
-            meaning={"flags": Flags(profile.flashfs_flags)},
+            meaning={
+                "flags": Flags(profile.flashfs_flags),
+                "total_size": scaled("1", BYTE),
+                "used_size": scaled("1", BYTE),
+            },
         ),
         "MSP_DATAFLASH_READ": MspLayout(  # 2816; uncompressed reply (fc/dataflash.py handles reads)
             request=c.Struct("address" / u32, "size" / u16, "allow_compression" / u8),

@@ -351,6 +351,7 @@ RSSI_MAX_VALUE = 1023  # src/main/rx/rx.h
 SLOW_VOLTAGE_TASK_FREQ_HZ = 50  # src/main/sensors/voltage.h
 FAST_VOLTAGE_TASK_FREQ_HZ = 200  # src/main/sensors/voltage.h
 CHANNEL_RANGE_MIN = 900  # src/main/fc/rc_modes.h
+CHANNEL_RANGE_MAX = 2100  # src/main/fc/rc_modes.h
 MAX_SUPPORTED_RC_CHANNEL_COUNT = 18  # src/main/rx/rx.h
 NON_AUX_CHANNEL_COUNT = 4  # src/main/rx/rx.h
 ALIASES: dict[str, tuple[str, ...]] = {  # current name -> names older builds of the line used

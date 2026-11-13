@@ -80,7 +80,7 @@ class Profile:
     vtx_device_types: dict[int, str]
     vtx_low_power_disarm: tuple[str, ...]  # the vtx_low_power_disarm setting's names, by value
     flashfs_flags: dict[int, str]  # MSP_DATAFLASH_SUMMARY flag bits
-    channel_range_min: int  # us at mode range step 0; steps are 25 us (MODE_STEP_TO_CHANNEL_VALUE, anchored)
+    channel_range: tuple[int, int]  # mode ranges, us: steps of 25 from the first (rc_modes.h, anchored)
 
     @cached_property
     def msp(self) -> dict[str, MspLayout]:
@@ -122,7 +122,7 @@ def _profile(line: tuple[int, int]) -> Profile:
         vtx_device_types=t.VTX_DEVICE_TYPES,
         vtx_low_power_disarm=t.VTX_LOW_POWER_DISARM,
         flashfs_flags=t.FLASHFS_FLAGS,
-        channel_range_min=t.CHANNEL_RANGE_MIN,
+        channel_range=(t.CHANNEL_RANGE_MIN, t.CHANNEL_RANGE_MAX),
     )
 
 

@@ -13,7 +13,7 @@ from typing import Any, cast
 
 import construct as c
 
-from fpv_tools.firmware.layout import Flags, Meaning, MeaningError, Positions
+from fpv_tools.firmware.layout import Flags, Linear, Meaning, MeaningError, Names, Positions
 from fpv_tools.firmware.layout import Value as Plain
 
 
@@ -84,27 +84,51 @@ def build(layout: c.Struct, args: Mapping[str, str], meaning: Mapping[str, Meani
     if given != fields[: len(given)]:
         raise CodecError(f"fields must be given in order without gaps: {names}")
     meaning = meaning or {}
-    try:
-        return b"".join(
-            sub.build(
-                _encode(meaning[name], sub.subcon, args[name]) if name in meaning else _coerce(sub.subcon, args[name])
-            )
-            for sub in given
-            for name in [str(sub.name)]
-        )
-    except MeaningError as e:
-        raise CodecError(str(e)) from e
-    except (c.ConstructError, ValueError) as e:
-        raise CodecError(str(e)) from e
+    out = b""
+    for sub in given:
+        name = str(sub.name)
+        text = args[name]
+        try:
+            value = _encode(meaning[name], sub.subcon, text) if name in meaning else _coerce(sub.subcon, text)
+            out += sub.build(value)
+        except (MeaningError, CodecError) as e:
+            raise CodecError(f"{name}={text}: {e}") from e
+        except (c.ConstructError, ValueError) as e:
+            raise CodecError(f"{name}={text}: {e}") from e
+    return out
 
 
 def _encode(meaning: Meaning, subcon: c.Construct[Any, Any], text: str) -> Any:
     """Command-line text as meant to the value a construct field expects."""
-    if isinstance(meaning, Positions):
-        raise CodecError("this field is printed by position and cannot be given on the command line")
-    if isinstance(subcon, c.GreedyRange | c.Array) and not isinstance(meaning, Flags):
-        return [meaning.encode(item) for item in text.split(",") if item]
-    return meaning.encode(text)
+    match meaning:
+        case Positions():
+            raise CodecError("printed by position, it cannot be given")
+        case Flags():
+            return meaning.encode(text)
+        case _ if isinstance(subcon, c.GreedyRange | c.Array):
+            inner = cast("c.Construct[Any, Any]", subcon.subcon)  # pyright: ignore[reportUnknownMemberType]
+            return [_encode(meaning, inner, item) for item in text.split(",") if item]
+        case Linear():
+            return meaning.encode(text, _bounds(subcon))
+        case Names():
+            return _fitting(meaning.encode(text), subcon)
+
+
+def _bounds(subcon: c.Construct[Any, Any]) -> tuple[int, int] | None:
+    """The integers a field can hold."""
+    if not isinstance(subcon, c.FormatField):
+        return None
+    fmt: str = subcon.fmtstr  # pyright: ignore[reportUnknownMemberType]
+    if fmt[-1] not in "bBhHiIlLqQ":
+        return None
+    bits = 8 * struct.calcsize(fmt)
+    return (-(1 << (bits - 1)), (1 << (bits - 1)) - 1) if fmt[-1].islower() else (0, (1 << bits) - 1)
+
+
+def _fitting(value: int, subcon: c.Construct[Any, Any]) -> int:
+    if (bounds := _bounds(subcon)) and not bounds[0] <= value <= bounds[1]:
+        raise CodecError(f"outside {bounds[0]}..{bounds[1]}")
+    return value
 
 
 def _coerce(subcon: c.Construct[Any, Any], text: str) -> Any:
@@ -114,7 +138,10 @@ def _coerce(subcon: c.Construct[Any, Any], text: str) -> Any:
     match subcon:
         case c.FormatField():
             fmt: str = subcon.fmtstr  # pyright: ignore[reportUnknownMemberType]
-            return float(text) if fmt[-1] in "fd" else int(text, 0)
+            try:
+                return float(text) if fmt[-1] in "fd" else _fitting(int(text, 0), subcon)
+            except ValueError:
+                raise CodecError("not a number") from None
         case c.StringEncoded():
             return text
         case c.GreedyRange() | c.Array():

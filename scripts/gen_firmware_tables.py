@@ -103,6 +103,7 @@ DEFINES = {
     "SLOW_VOLTAGE_TASK_FREQ_HZ": DefineSpec("src/main/sensors/voltage.h", "SLOW_VOLTAGE_TASK_FREQ_HZ"),
     "FAST_VOLTAGE_TASK_FREQ_HZ": DefineSpec("src/main/sensors/voltage.h", "FAST_VOLTAGE_TASK_FREQ_HZ"),
     "CHANNEL_RANGE_MIN": DefineSpec("src/main/fc/rc_modes.h", "CHANNEL_RANGE_MIN"),
+    "CHANNEL_RANGE_MAX": DefineSpec("src/main/fc/rc_modes.h", "CHANNEL_RANGE_MAX"),
     "MAX_SUPPORTED_RC_CHANNEL_COUNT": DefineSpec("src/main/rx/rx.h", "MAX_SUPPORTED_RC_CHANNEL_COUNT"),
     "NON_AUX_CHANNEL_COUNT": DefineSpec("src/main/rx/rx.h", "NON_AUX_CHANNEL_COUNT"),
 }

@@ -185,6 +185,11 @@ ANCHORS: dict[str, list[Anchor]] = {
         ),
         ("src/main/msp/msp_box.c", "sbufWriteU8(dst, box->permanentId);"),
         ("src/main/fc/rc_modes.h", "#define MODE_STEP_TO_CHANNEL_VALUE(step) (CHANNEL_RANGE_MIN + 25 * step)"),
+        ("src/main/fc/rc_modes.h", "#define MIN_MODE_RANGE_STEP 0"),
+        ("src/main/fc/rc_modes.h", "#define MAX_MODE_RANGE_STEP ((CHANNEL_RANGE_MAX - CHANNEL_RANGE_MIN) / 25)"),
+        # Channel values are pulse widths, in us by RC convention: the firmware states the range and the term
+        (RAW + "src/main/rx/rx.h", "#define PWM_PULSE_MIN 750 // minimum PWM pulse width which is considered valid"),
+        (RAW + "src/main/rx/rx.h", "extern float rcData[MAX_SUPPORTED_RC_CHANNEL_COUNT]; // interval [1000;2000]"),
         ("src/main/rx/rx.h", "#define MAX_AUX_CHANNEL_COUNT (MAX_SUPPORTED_RC_CHANNEL_COUNT - NON_AUX_CHANNEL_COUNT)"),
         # Channels in rcData order (rc_alias_e)
         (
