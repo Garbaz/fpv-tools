@@ -1,6 +1,6 @@
 [project]
 name = "fpv-tools"
-version = "0.2.3"
+version = "0.3.0"
 description = "Betaflight flight controllers and their blackbox logs from the command line"
 readme = "README.md"
 license = "GPL-3.0-or-later"

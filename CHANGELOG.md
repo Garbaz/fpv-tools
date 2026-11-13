@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-13
+
 ### Added
 
 - `fpv-tools msp` shows and takes known fields as the firmware means them. Modes, RC and aux channels, VTX device
@@ -75,7 +77,8 @@ First release.
   `export`), with a decoder that keeps all log events.
 - Support for Betaflight 4.5, 2025.12 and 2026.6, with tables generated from the firmware source.
 
-[Unreleased]: https://github.com/Garbaz/fpv-tools/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/Garbaz/fpv-tools/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Garbaz/fpv-tools/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/Garbaz/fpv-tools/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/Garbaz/fpv-tools/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/Garbaz/fpv-tools/compare/v0.2.0...v0.2.1
