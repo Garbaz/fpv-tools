@@ -36,9 +36,10 @@ def cli(
 ) -> None:
     """Run commands in the flight controller's CLI and print their output.
 
-    Commands come from the arguments, or one per line from stdin. The output is what the FC prints, without
-    echoes and prompts. Afterwards the FC reboots, dropping changes not saved, unless --save or --no-reboot. A
-    `diff all` export ends with `save`, so feeding it back in restores it:
+    Commands are lines, from the arguments or stdin. The output is what the FC prints, without echoes and
+    prompts. Afterwards the FC reboots, dropping changes not saved, unless --save or --no-reboot. A command the
+    FC answers with an error stops the rest, and nothing is saved. A `diff all` export ends with `save`, so
+    feeding it back in restores it:
 
         fpv-tools cli 'diff all' > config.txt
         fpv-tools cli < config.txt
@@ -47,7 +48,7 @@ def cli(
     Parameters
     ----------
     commands
-        CLI commands, e.g. 'get vbat' 'diff all'.
+        CLI commands, e.g. 'get vbat' 'diff all'; an argument with line breaks is one command per line.
     save
         Save the settings at the end (the FC reboots).
     no_reboot
@@ -61,6 +62,7 @@ def cli(
     lines = list(input_lines(commands))
     end = End.SAVE if save else End.KEEP if no_reboot else End.REBOOT
     failed: list[str] = []
+    not_run = 0
     closing = output = ""
     with open_port(port) as serial, Session(serial, timeout=10.0) as session:
         identity = usb_identity(serial.port)
@@ -71,6 +73,7 @@ def cli(
             if ERROR_MARK in output:
                 failed.append(command)
                 if not keep_going:
+                    not_run = len(lines) - n
                     break
             if not session.active:
                 if n < len(lines):
@@ -91,8 +94,13 @@ def cli(
     if rebooting:
         await_reboot(identity)
     if failed:
-        unsaved = " (--save not applied)" if end is End.SAVE else ""
-        raise CommandFailed(f"{len(failed)} command(s) failed{unsaved}: {'; '.join(failed)}")
+        what = f"{failed[0]!r} failed" if len(failed) == 1 else f"{len(failed)} commands failed: {'; '.join(failed)}"
+        skipped = f"; {not_run} line(s) after it not run" if not_run else ""
+        if end is End.KEEP:
+            outcome = "; the changes made stay in effect until reboot, unsaved (--no-reboot)"
+        else:
+            outcome = "; the FC rebooted, dropping unsaved changes" + (" (--save not applied)" if save else "")
+        raise CommandFailed(what + skipped + outcome)
 
 
 class _Layouts:

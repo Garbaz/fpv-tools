@@ -23,6 +23,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 - If entering the CLI isn't confirmed, `fpv-tools cli` sends `exit` before giving up, so the FC isn't left in its
   CLI, where it ignores MSP.
 - `fpv-tools msp` says when the FC is in its CLI (it echoes the request back) instead of only timing out.
+- `fpv-tools cli` reads an argument with line breaks as one command per line, as the FC does. Before, the whole
+  argument counted as one command: lines after a failing one still ran, and the error quoted the whole argument.
+- A failed `fpv-tools cli` command is named on its own, with how many lines after it weren't run and whether its
+  changes were dropped (reboot) or stay in effect (`--no-reboot`).
 
 ### Changed
 

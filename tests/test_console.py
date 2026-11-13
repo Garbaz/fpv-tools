@@ -67,6 +67,28 @@ def test_fpv_cli_does_not_save_after_a_failed_command(monkeypatch: pytest.Monkey
     assert fake.written[-1] == "exit\r\n"  # the reboot drops the change that did apply
 
 
+def test_a_failing_line_stops_a_batch_given_as_one_argument(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Design: an argument with line breaks is one command per line, as the FC reads it, so the line that fails
+    # is named and stops the rest, as with separate arguments
+    answers = {"get vbat_min_cell_voltage": "", "get battery_capacity": "###ERROR IN get: INVALID NAME###"}
+    fake = _connect(monkeypatch, FakeCli(answers))
+    batch = "get vbat_min_cell_voltage\nget battery_capacity\nget bat_capacity\n"
+    with pytest.raises(fc.CommandFailed) as failure:
+        fc.cli(batch)
+    assert str(failure.value) == (
+        "'get battery_capacity' failed; 1 line(s) after it not run; the FC rebooted, dropping unsaved changes"
+    )
+    assert "get bat_capacity\r\n" not in fake.written and fake.written[-1] == "exit\r\n"
+
+
+def test_a_failure_with_no_reboot_says_what_stays_in_effect(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Design: --no-reboot is honoured after a failure too, and the message says the changes made stay active
+    fake = _connect(monkeypatch, FakeCli({"set x = 1": "", "set y = 2": "###ERROR: set: Invalid name"}))
+    with pytest.raises(fc.CommandFailed, match="stay in effect until reboot, unsaved"):
+        fc.cli("set x = 1", "set y = 2", no_reboot=True)
+    assert fake.written[-1] == "exit noreboot\r\n"
+
+
 def test_a_cli_entered_without_its_prompt_is_left() -> None:
     # Seen on a real FC: '#' entered the CLI, but another program on the port read the banner and prompt, so all
     # that came back was the echo of its MSP request. Design: the FC is not left in the CLI, deaf to MSP.

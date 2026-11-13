@@ -79,16 +79,15 @@ class LogOptions:
 
 
 def input_lines(arguments: Sequence[str]) -> Iterator[str]:
-    """Arguments if any were given, else non-empty, non-comment lines from stdin (when it is not a terminal)."""
-    if arguments:
-        yield from arguments
-        return
-    if sys.stdin.isatty():
+    """The non-empty, non-comment lines of the arguments if any were given, else of stdin (when it is not a
+    terminal). An argument with line breaks is several lines, as the FC would read it."""
+    if not arguments and sys.stdin.isatty():
         raise ValueError("nothing to do: give commands as arguments or on stdin")
-    for line in sys.stdin:
-        line = line.strip()
-        if line and not line.startswith("#"):
-            yield line
+    for text in arguments or sys.stdin:
+        for line in text.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                yield line
 
 
 def confirm(question: str) -> bool:

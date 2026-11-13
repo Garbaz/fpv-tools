@@ -64,7 +64,7 @@ def open_port(port: str | None = None, timeout: float = 1.0) -> serial.Serial:
         return _Exclusive(port, 115200, timeout=timeout, write_timeout=timeout)
     except serial.SerialException as e:
         if _busy(e):
-            raise LinkError(f"{port} is busy: another program (e.g. the Betaflight app) has it open") from e
+            raise LinkError(f"{port} is busy: another process has it open") from e
         raise LinkError(str(e)) from e
 
 
