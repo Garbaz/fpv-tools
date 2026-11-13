@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call: # release.yml: a release is built only once all of this passes on its tag
 
 permissions:
   contents: read

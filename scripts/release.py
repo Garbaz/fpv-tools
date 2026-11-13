@@ -1,10 +1,14 @@
 """Release a new version: the tag this pushes makes .github/workflows/release.yml publish it on PyPI and GitHub.
 
-uv run scripts/release.py patch|minor|major
+uv run scripts/release.py patch|minor|major [--dry-run]
 
 Run on main, in step with origin, with a clean tree and the release notes under [Unreleased] in CHANGELOG.md. It runs
 the checks CI runs, bumps the version, moves the notes under the new version, commits, tags vX.Y.Z and, if you
-confirm, pushes the commit and the tag.
+confirm, pushes the commit and the tag. The release workflow publishes only once the whole CI passes on the tag.
+
+--dry-run changes nothing: it runs the checks and reports everything a release would refuse (also usable on a branch
+before pushing). The hardware tests are not among the checks: run them when FC-facing code changed,
+FPV_TEST_PORT=/dev/ttyACM0 uv run pytest -m hardware.
 """
 
 import re
@@ -44,27 +48,49 @@ def changelog(text: str, old: str, new: str, day: str) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) != 2 or sys.argv[1] not in BUMPS:
+    args = sys.argv[1:]
+    dry_run = "--dry-run" in args
+    args = [a for a in args if a != "--dry-run"]
+    if len(args) != 1 or args[0] not in BUMPS:
         raise SystemExit(__doc__)
-    bump = sys.argv[1]
+    bump = args[0]
+    problems: list[str] = []
+
+    def refuse(problem: str) -> None:
+        if not dry_run:
+            raise SystemExit(problem)
+        problems.append(problem)
 
     if _git("branch", "--show-current") != "main":
-        raise SystemExit("not on main")
+        refuse("not on main")
     if _git("status", "--porcelain"):
-        raise SystemExit("uncommitted changes")
+        refuse("uncommitted changes")
     _git("fetch", "origin", "main")
     if _git("rev-parse", "HEAD") != _git("rev-parse", "origin/main"):
-        raise SystemExit("main is not the same as origin/main")
+        refuse("main is not the same as origin/main")
     old = _uv("version", "--short")
     new = _uv("version", "--bump", bump, "--dry-run", "--short")
     if _git("tag", "--list", f"v{new}"):
-        raise SystemExit(f"v{new} is already tagged")
-    text = changelog(CHANGELOG.read_text(), old, new, date.today().isoformat())
+        refuse(f"v{new} is already tagged")
+    text = ""
+    try:
+        text = changelog(CHANGELOG.read_text(), old, new, date.today().isoformat())
+    except SystemExit as e:
+        refuse(str(e))
 
     for check in CHECKS:
         print(f"$ uv run {' '.join(check)}", file=sys.stderr)
         if subprocess.run(["uv", "run", *check], cwd=ROOT).returncode:
-            raise SystemExit(f"{check[0]} failed: nothing changed")
+            refuse(f"{check[0]} failed" + ("" if dry_run else ": nothing changed"))
+
+    if dry_run:
+        for problem in problems:
+            print(f"would refuse: {problem}", file=sys.stderr)
+        print(
+            f"{'not ready' if problems else 'ready'} to release {old} => {new} (dry run: nothing changed)",
+            file=sys.stderr,
+        )
+        raise SystemExit(1 if problems else 0)
 
     _uv("version", "--bump", bump)
     CHANGELOG.write_text(text)

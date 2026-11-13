@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag vX.Y.Z releases version X.Y.Z to PyPI and GitHub: the tag must match pyproject.toml, and
-# CHANGELOG.md must have notes for it. scripts/release.py prepares and pushes such a tag.
+# Pushing a tag vX.Y.Z releases version X.Y.Z to PyPI and GitHub: the whole CI must pass on it, the tag must match
+# pyproject.toml, and CHANGELOG.md must have notes for it. scripts/release.py prepares and pushes such a tag.
 on:
   push:
     tags: ["v*"]
@@ -10,7 +10,11 @@ permissions:
   contents: read
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -19,7 +23,6 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Check the tag against the version
         run: test "$GITHUB_REF_NAME" = "v$(uv version --short)"
-      - run: uv run pytest
       - run: uv build
       - name: Release notes from CHANGELOG.md
         run: |
