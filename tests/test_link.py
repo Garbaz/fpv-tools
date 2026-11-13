@@ -1,4 +1,5 @@
 import os
+import sys
 from collections.abc import Iterator
 
 import pytest
@@ -50,7 +51,10 @@ def test_waiting_for_the_fc_to_come_back(monkeypatch: pytest.MonkeyPatch) -> Non
     assert link.await_return(identity) is None  # never left
 
 
-@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="POSIX pseudo-terminal; root ignores TIOCEXCL")
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.geteuid() == 0,
+    reason="macOS pseudo-terminals ignore TIOCEXCL (its serial driver honours it); root ignores TIOCEXCL",
+)
 def test_the_port_is_kept_from_other_programs() -> None:
     # Design: while fpv-tools talks to the FC, nothing else may (the Betaflight app connecting in between left the
     # FC in its CLI). A pseudo-terminal stands in for the FC's port.

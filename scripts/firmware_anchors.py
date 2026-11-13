@@ -256,6 +256,9 @@ ANCHORS: dict[str, list[Anchor]] = {
             "} else if (mspPort->pendingRequest == MSP_PENDING_BOOTLOADER_ROM) { "
             "mspPort->pendingRequest = MSP_PENDING_NONE; }",
         ),
-        ("src/main/cli/settings.c", '{ "reboot_character", VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 48, 126 }'),
+        (
+            "src/main/cli/settings.c",
+            '{ "reboot_character", VAR_UINT8 | MASTER_VALUE, .config.minmaxUnsigned = { 48, 126 }',
+        ),
     ],
 }

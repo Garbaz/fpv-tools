@@ -18,8 +18,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- fpv-tools keeps other programs off the FC's port while it uses it. On Linux and macOS another program (e.g.
-  the Betaflight app) could open it meanwhile and talk to the FC in between, which once left the FC in its CLI.
+- fpv-tools keeps other programs off the FC's port while it uses it. Another program (e.g. the Betaflight app)
+  could open it meanwhile and talk to the FC in between, which once left the FC in its CLI. Tested on Linux;
+  Windows opens serial ports exclusively anyway; on macOS it uses the lock Apple documents for serial ports, but
+  is untested on hardware.
 - If entering the CLI isn't confirmed, `fpv-tools cli` sends `exit` before giving up, so the FC isn't left in its
   CLI, where it ignores MSP.
 - `fpv-tools msp` says when the FC is in its CLI (it echoes the request back) instead of only timing out.
